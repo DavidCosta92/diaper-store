@@ -1,0 +1,30 @@
+# Build output
+bin/
+obj/
+TestResults/
+installer-output/
+
+# IDE / local tooling
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Local data: never commit databases, settings or logs
+*.db
+*.db-shm
+*.db-wal
+appsettings.json
+config.json
+logs/
+
+# Optional WebView2 installer placed next to Carinitos.iss when building the setup
+MicrosoftEdgeWebview2Setup.exe
+
+# Private documentation (kept in its own private repository)
+private/
+DOCUMENTACION_NEGOCIO.md
+
+# Unused copy of the login background (the app uses wwwroot/login-bg.jpg)
+/login-bg.jpg
