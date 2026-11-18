@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>panialera</RootNamespace>
+    <ApplicationIcon>appicon.ico</ApplicationIcon>
+    <!-- Tests are a separate project: their files are not part of the app or the installer. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);tests\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Copy the icon next to the .exe to use it as the window icon. -->
+    <Content Include="appicon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- appsettings.json is NOT shipped: the app creates it next to the .exe on first run,
+       so it survives redeploys (publish does not overwrite it). -->
+  <ItemGroup>
+    <Content Remove="appsettings*.json" />
+    <None Remove="appsettings*.json" />
+  </ItemGroup>
+
+  <!-- Distributor sync: the already published Scrapper.exe (and its private settings file)
+       is copied to the "scrapper" subfolder, where the app looks for it, on build and publish.
+       Publish it first: dotnet publish ..\Scrapper -c Release -o ..\Scrapper\publish -->
+  <PropertyGroup>
+    <ScraperExe>$(MSBuildProjectDirectory)\..\Scrapper\publish\Scrapper.exe</ScraperExe>
+    <ScraperSettings>$(MSBuildProjectDirectory)\..\Scrapper\publish\scraper.settings.json</ScraperSettings>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(ScraperExe)')">
+    <None Include="$(ScraperExe)" Link="scrapper\Scrapper.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(ScraperSettings)')">
+    <None Include="$(ScraperSettings)" Link="scrapper\scraper.settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="WarnMissingScraper" BeforeTargets="Build" Condition="!Exists('$(ScraperExe)')">
+    <Warning Text="$(ScraperExe) not found: the app will not be able to sync with the distributor. Publish the Scrapper project first." />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.WindowsForms" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
+    <PackageReference Include="QuestPDF" Version="2026.9.1" />
+  </ItemGroup>
+
+</Project>
