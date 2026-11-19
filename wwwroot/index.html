@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cariñitos</title>
+    <base href="/" />
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="panialera.styles.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+</head>
+
+<body>
+    <div id="app">
+        <div style="display:flex;align-items:center;justify-content:center;height:100vh;">
+            Cargando...
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" data-nosnippet>
+        <span id="blazor-error-detail">Ocurrió un error inesperado.</span>
+        <a href="." class="reload">Recargar</a>
+        <span class="dismiss">🗙</span>
+    </div>
+
+    <script>
+        // Catches global JS errors and shows them in the error banner,
+        // to be able to diagnose the "Ocurrió un error inesperado" message.
+        (function () {
+            function showError(msg) {
+                var detail = document.getElementById('blazor-error-detail');
+                var box = document.getElementById('blazor-error-ui');
+                if (detail) {
+                    detail.textContent = msg;
+                }
+                if (box) {
+                    box.style.display = 'block';
+                }
+                // Keep them in sessionStorage for later inspection.
+                try {
+                    var prev = sessionStorage.getItem('blazorErrors') || '';
+                    sessionStorage.setItem('blazorErrors', prev + '\n' + msg);
+                } catch (e) { }
+            }
+
+            window.addEventListener('error', function (e) {
+                var msg = 'Error: ' + (e.message || 'desconocido');
+                if (e.filename) {
+                    msg += ' @ ' + e.filename + ':' + e.lineno + ':' + e.colno;
+                }
+                if (e.error && e.error.stack) {
+                    msg += '\n' + e.error.stack;
+                }
+                showError(msg);
+            });
+
+            window.addEventListener('unhandledrejection', function (e) {
+                var reason = e.reason;
+                var msg = 'Promesa rechazada: ';
+                if (reason && reason.stack) {
+                    msg += (reason.message || reason) + '\n' + reason.stack;
+                } else {
+                    msg += (reason && reason.message) ? reason.message : String(reason);
+                }
+                showError(msg);
+            });
+
+            // Close the banner when the 🗙 is clicked.
+            document.addEventListener('click', function (e) {
+                if (e.target && e.target.classList.contains('dismiss')) {
+                    var box = document.getElementById('blazor-error-ui');
+                    if (box) {
+                        box.style.display = 'none';
+                    }
+                }
+            });
+        })();
+
+        // Scroll to the top of the page (used when editing a record).
+        window.scrollToTop = function () {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+    </script>
+
+    <script src="_framework/blazor.webview.js"></script>
+</body>
+
+</html>

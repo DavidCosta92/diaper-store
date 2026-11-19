@@ -1,0 +1,268 @@
+/* "Cariñitos" brand palette */
+:root {
+    --carinitos-pink: #e86fa3;
+    --carinitos-pink-dark: #d75990;
+    --carinitos-teal: #2fb0a9;
+    --carinitos-teal-dark: #26938d;
+    --carinitos-purple: #9b72c6;
+    --carinitos-purple-dark: #875fb4;
+    --carinitos-yellow: #f3b62e;
+}
+
+html, body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+a, .btn-link {
+    color: var(--carinitos-teal-dark);
+}
+
+/* Primary buttons (login, save) → brand pink */
+.btn-primary {
+    color: #fff;
+    background-color: var(--carinitos-pink);
+    border-color: var(--carinitos-pink);
+}
+
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    color: #fff;
+    background-color: var(--carinitos-pink-dark);
+    border-color: var(--carinitos-pink-dark);
+}
+
+/* Disabled: same pink (Bootstrap adds opacity => light pink). */
+.btn-primary:disabled, .btn-primary.disabled {
+    color: #fff;
+    background-color: var(--carinitos-pink);
+    border-color: var(--carinitos-pink);
+}
+
+/* Add/create buttons → lilac (add item, create user, add product) */
+.btn-success {
+    color: #fff;
+    background-color: #9c80bd;
+    border-color: #9c80bd;
+}
+
+.btn-success:hover, .btn-success:focus, .btn-success:active {
+    color: #fff;
+    background-color: #8667a0;
+    border-color: #8667a0;
+}
+
+/* Disabled: same lilac (Bootstrap adds opacity => light lilac). */
+.btn-success:disabled, .btn-success.disabled {
+    color: #fff;
+    background-color: #9c80bd;
+    border-color: #9c80bd;
+}
+
+.btn-outline-primary {
+    color: var(--carinitos-pink-dark);
+    border-color: var(--carinitos-pink);
+}
+
+.btn-outline-primary:hover, .btn-outline-primary:active {
+    color: #fff;
+    background-color: var(--carinitos-pink);
+    border-color: var(--carinitos-pink);
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #8fded9;
+}
+
+.form-check-input:checked {
+    background-color: var(--carinitos-teal);
+    border-color: var(--carinitos-teal);
+}
+
+.content {
+    padding-top: 1.1rem;
+}
+
+h1:focus {
+    outline: none;
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #26b050;
+}
+
+.invalid {
+    outline: 1px solid #e50000;
+}
+
+.validation-message {
+    color: #e50000;
+}
+
+.blazor-error-boundary {
+    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
+    padding: 1rem 1rem 1rem 3.7rem;
+    color: white;
+}
+
+    .blazor-error-boundary::after {
+        content: "An error has occurred."
+    }
+
+.darker-border-checkbox.form-check-input {
+    border-color: #929292;
+}
+
+/* Row action buttons: all the same size, with a centered icon. */
+.action-buttons {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.action-btn {
+    width: 34px;
+    height: 31px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* Payment method badges: the same color across the app (Sales, Expenses, Reports). */
+.badge-cash {
+    background-color: var(--carinitos-teal) !important;
+    color: #fff;
+}
+
+.badge-mp {
+    background-color: var(--carinitos-purple) !important;
+    color: #fff;
+}
+
+/* Global error banner (host page). Hidden by default; Blazor shows it
+   (display:block) only when a real exception happens. IMPORTANT: this rule
+   must be GLOBAL (not scoped) to reach the div in index.html. */
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+    white-space: pre-wrap;
+    max-height: 40vh;
+    overflow-y: auto;
+    font-size: 0.85rem;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
+
+.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+    color: var(--bs-secondary-color);
+    text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+    text-align: start;
+}
+
+/* Consistent zebra for every table in the app:
+   even rows with a soft background, odd rows without. Works with table-hover. */
+.zebra-striped tbody tr:nth-child(even) > td {
+    background-color: #f6f8fa;
+}
+
+/* Explicit per-row zebra (for tables with interleaved rows,
+   like the sales list with day separators and details). */
+.zebra-row > td {
+    background-color: #f6f8fa;
+}
+
+/* Row being edited: teal frame, visible on any background. */
+tr.editing-row > td {
+    border-top: 2px solid var(--carinitos-teal);
+    border-bottom: 2px solid var(--carinitos-teal);
+}
+
+tr.editing-row > td:first-child {
+    box-shadow: inset 4px 0 0 0 var(--carinitos-teal);
+    border-left: 2px solid var(--carinitos-teal);
+}
+
+tr.editing-row > td:last-child {
+    border-right: 2px solid var(--carinitos-teal);
+}
+/* Table cell holding a product thumbnail (ProductImage). */
+td.thumb-cell { width: 1%; padding-top: 4px; padding-bottom: 4px; vertical-align: middle; }
+
+/* --- Share by WhatsApp (Products and Distributor), like the phone app --- */
+.share-col {
+    width: 1%;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.share-add {
+    color: #9c80bd;
+    border: 1px solid #9c80bd;
+    background-color: #fff;
+    line-height: 1;
+    padding: 2px 7px;
+}
+
+.share-add:hover:not(:disabled) {
+    color: #fff;
+    background-color: #9c80bd;
+}
+
+.share-add.chosen:disabled {
+    color: #fff;
+    background-color: #9c80bd;
+    opacity: 1;
+}
+
+.share-panel {
+    border: 1px solid #d9cce8;
+    border-left: 4px solid #9c80bd;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    background-color: #faf7fd;
+}
+
+.share-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.share-lines td {
+    vertical-align: middle;
+    background-color: transparent;
+}
+
+.share-qty .btn {
+    padding: 0 7px;
+}
+
+.share-qty-value {
+    display: inline-block;
+    min-width: 22px;
+    text-align: center;
+    font-weight: 600;
+}
+
+.whatsapp-icon {
+    vertical-align: -3px;
+}
