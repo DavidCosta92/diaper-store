@@ -1,0 +1,79 @@
+﻿<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Cariñitos</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="products">
+                <span class="bi bi-box-seam-nav-menu" aria-hidden="true"></span> Productos
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="stock-counts">
+                <span class="bi bi-clipboard-check-nav-menu" aria-hidden="true"></span> Arqueo
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="distributor">
+                <span class="bi bi-truck-nav-menu" aria-hidden="true"></span> Distribuidor
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="sales">
+                <span class="bi bi-cash-coin-nav-menu" aria-hidden="true"></span> Ventas
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="expenses">
+                <span class="bi bi-wallet-nav-menu" aria-hidden="true"></span> Egresos
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="customers">
+                <span class="bi bi-people-nav-menu" aria-hidden="true"></span> Clientes
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="todos">
+                <span class="bi bi-list-check-nav-menu" aria-hidden="true"></span> Pendientes
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="reports">
+                <span class="bi bi-graph-up-nav-menu" aria-hidden="true"></span> Reportes
+            </NavLink>
+        </div>
+
+        <AuthorizeView Roles="Admin">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="users">
+                    <span class="bi bi-person-plus-nav-menu" aria-hidden="true"></span> Usuarios
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="audit">
+                    <span class="bi bi-journal-text-nav-menu" aria-hidden="true"></span> Auditoría
+                </NavLink>
+            </div>
+        </AuthorizeView>
+    </nav>
+</div>
+

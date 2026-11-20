@@ -1,0 +1,114 @@
+.page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+
+.sidebar {
+    background-image: linear-gradient(180deg, #e86fa3 0%, #9b72c6 50%, #2fb0a9 100%);
+}
+
+.top-row {
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #d6d5d5;
+    justify-content: flex-end;
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+}
+
+    .top-row ::deep a, .top-row ::deep .btn-link {
+        white-space: nowrap;
+        margin-left: 1.5rem;
+        text-decoration: none;
+    }
+
+    .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
+        text-decoration: underline;
+    }
+
+    .top-row ::deep a:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .top-row ::deep .user-link {
+        font-weight: 600;
+    }
+
+    .top-row ::deep .logout-link {
+        color: #d63333;
+    }
+
+@media (max-width: 640.98px) {
+    .top-row {
+        justify-content: space-between;
+    }
+
+    .top-row ::deep a, .top-row ::deep .btn-link {
+        margin-left: 0;
+    }
+}
+
+@media (min-width: 641px) {
+    .page {
+        flex-direction: row;
+    }
+
+    /* Lets the content shrink (tables scroll inside it) instead of pushing
+       or shrinking the menu. */
+    main {
+        min-width: 0;
+    }
+
+    /* Width = just what the menu content needs, the same on every page.
+       It must not shrink, or pages with wide tables (Products) would squeeze it. */
+    .sidebar {
+        flex: 0 0 auto;
+        width: max-content;
+        height: 100vh;
+        position: sticky;
+        top: 0;
+    }
+
+    .top-row {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .top-row.auth ::deep a:first-child {
+        flex: 1;
+        text-align: right;
+        width: 0;
+    }
+
+    .top-row, article {
+        padding-left: 2rem !important;
+        padding-right: 1.5rem !important;
+    }
+}
+
+.error-details {
+    line-height: 1.6;
+}
+
+.error-details p {
+    margin-bottom: 0.5rem;
+}
+
+.error-stack {
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    font-family: 'Courier New', monospace;
+    max-height: 300px;
+    color: #333;
+}

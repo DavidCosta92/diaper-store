@@ -1,0 +1,112 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Routing
+@using panialera.Auth
+@using panialera.Services
+@inject AppAuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+@inject UnsavedGuard Guard
+@inject AuthService AuthService
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <AuthorizeView>
+                <Authorized>
+                    <a href="account" class="user-link">@context.User.Identity!.Name</a>
+                    <button class="btn btn-link logout-link" @onclick="Logout">Salir</button>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+
+        <article class="content px-4">
+            <LoggingErrorBoundary @ref="errorBoundary">
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent Context="ex">
+                    <Modal IsOpen="true"
+                           Title="Error - Detalles de la Excepción"
+                           OnClose="RecoverFromError">
+                        <div class="error-details">
+                            <p><strong>Tipo de error:</strong></p>
+                            <p class="text-muted">@ex.GetType().FullName</p>
+
+                            <p class="mt-3"><strong>Mensaje:</strong></p>
+                            <p>@ex.Message</p>
+
+                            <p class="mt-3"><strong>Stack trace:</strong></p>
+                            <pre class="error-stack">@ex.StackTrace</pre>
+
+                            @if (ex.InnerException != null)
+                            {
+                                <p class="mt-3"><strong>Inner exception:</strong></p>
+                                <p>@ex.InnerException.Message</p>
+                                <pre class="error-stack">@ex.InnerException.StackTrace</pre>
+                            }
+
+                            <p class="mt-3 text-muted"><small>El detalle completo también se guardó en la carpeta <code>logs</code> junto al ejecutable.</small></p>
+                        </div>
+                    </Modal>
+                </ErrorContent>
+            </LoggingErrorBoundary>
+        </article>
+    </main>
+</div>
+
+<UnsavedChangesDialog />
+<ToastHost />
+<ImageViewerHost />
+
+@code {
+    private LoggingErrorBoundary? errorBoundary;
+    private IDisposable? navGuardReg;
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        // Navigation interceptor: if a form has unsaved changes, ask first.
+        navGuardReg = Nav.RegisterLocationChangingHandler(OnLocationChanging);
+    }
+
+    private async ValueTask OnLocationChanging(LocationChangingContext context)
+    {
+        if (!Guard.IsDirty)
+            return;
+
+        // Shows the dialog. If the user discards or saves successfully, navigation goes on;
+        // if saving fails validation, navigation is blocked.
+        var canLeave = await Guard.TryLeaveAsync();
+        if (!canLeave)
+            context.PreventNavigation();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        // Reset the ErrorBoundary on navigation so the old error is not shown anymore.
+        errorBoundary?.Recover();
+    }
+
+    private void RecoverFromError()
+    {
+        errorBoundary?.Recover();
+    }
+
+    private async Task Logout()
+    {
+        await AuthService.LogLogoutAsync(); // before clearing the user, to record who logged out
+        AuthState.SignOut();
+        Nav.NavigateTo("login");
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        navGuardReg?.Dispose();
+    }
+}
