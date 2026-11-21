@@ -1,0 +1,31 @@
+@inject ImageViewer Viewer
+
+@* Product thumbnail with a magnifier to see it large. Without an image it renders nothing.
+   Clicks do not propagate, so they do not trigger the row's double click (edit / pick). *@
+@if (!string.IsNullOrEmpty(Src))
+{
+    <span class="pimg" style="width:@(Height)px; height:@(Height)px;"
+          @onclick:stopPropagation="true" @ondblclick:stopPropagation="true">
+        <img src="@Src" alt="@Title" loading="lazy" title="Ver imagen" @onclick="Open" />
+        <button type="button" class="pimg-zoom" title="Ver imagen" @onclick="Open"
+                style="width:@(ZoomSize)px; height:@(ZoomSize)px;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
+            </svg>
+        </button>
+    </span>
+}
+
+@code {
+    [Parameter] public string? Src { get; set; }
+
+    // Height (and width: the box is square) in pixels.
+    [Parameter] public int Height { get; set; } = 40;
+
+    // Viewer title (e.g. the product name).
+    [Parameter] public string? Title { get; set; }
+
+    private int ZoomSize => Math.Clamp((int)(Height * 0.4), 14, 20);
+
+    private void Open() => Viewer.Show(Src!, Title);
+}

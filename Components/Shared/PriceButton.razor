@@ -1,0 +1,10 @@
+<button type="button" class="btn btn-sm btn-outline-primary action-btn" title="Historial de precios" @onclick="OnClick">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M4 10.781c.148 1.667 1.513 2.85 3.591 3.003V15h1.043v-1.216c2.27-.179 3.678-1.438 3.678-3.3 0-1.59-.947-2.51-2.956-3.028l-.722-.187V3.467c1.122.11 1.879.714 2.06 1.578h1.588c-.15-1.594-1.481-2.735-3.648-2.884V1H7.591v1.188c-1.83.235-3.223 1.457-3.223 3.28 0 1.44.878 2.573 2.56 3.005l.667.183v4.083c-1.164-.11-1.939-.716-2.081-1.663zm3.59-1.9c-1.4-.51-1.65-.717-1.65-1.518 0-.759.475-1.324 1.25-1.53V8.89zm1.226 1.079c1.398.51 1.65.718 1.65 1.518 0 .759-.475 1.323-1.25 1.53V9.96z" />
+    </svg>
+</button>
+
+@code {
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+}

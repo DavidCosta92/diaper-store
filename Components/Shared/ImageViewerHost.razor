@@ -1,0 +1,19 @@
+@implements IDisposable
+@inject ImageViewer Viewer
+
+<Modal IsOpen="Viewer.Src != null" Title="@(Viewer.Title ?? "Imagen")" OnClose="Viewer.Close">
+    @if (Viewer.Src != null)
+    {
+        <div class="text-center">
+            <img src="@Viewer.Src" class="viewer-img" alt="@Viewer.Title" />
+        </div>
+    }
+</Modal>
+
+@code {
+    protected override void OnInitialized() => Viewer.Changed += OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Viewer.Changed -= OnChanged;
+}

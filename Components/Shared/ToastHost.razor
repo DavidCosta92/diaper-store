@@ -1,0 +1,58 @@
+@implements IDisposable
+
+<div class="toast-host">
+    @foreach (var t in toasts)
+    {
+        <div class="app-toast @t.CssClass" role="alert">
+            <div class="app-toast-body">
+                <div class="app-toast-title">@t.Title</div>
+                @if (!string.IsNullOrEmpty(t.Message))
+                {
+                    <div class="app-toast-msg">@t.Message</div>
+                }
+                <div class="app-toast-meta">@t.Meta</div>
+            </div>
+            <button type="button" class="app-toast-close" title="Cerrar" @onclick="() => Close(t)">×</button>
+        </div>
+    }
+</div>
+
+@code {
+    private const int DurationMs = 8000;
+    private readonly List<Toast> toasts = new();
+
+    private sealed record Toast(string Title, string Message, string Meta, string CssClass);
+
+    protected override void OnInitialized()
+    {
+        ErrorHub.ErrorOccurred += OnError;
+        AppNotices.Raised += OnNotice;
+    }
+
+    private void OnError(ErrorNotice notice) => Show(new Toast("Ocurrió un error", notice.Message,
+        $"{notice.Context} · {notice.Date:HH:mm:ss} · registrado en la bitácora", string.Empty));
+
+    private void OnNotice(AppNotice notice) => Show(new Toast(notice.Title, notice.Message,
+        notice.Date.ToString("HH:mm:ss"), notice.IsWarning ? "app-toast-warning" : "app-toast-info"));
+
+    // The events can come from any thread: hop to the UI thread with InvokeAsync.
+    private void Show(Toast toast)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            toasts.Add(toast);
+            StateHasChanged();
+            await Task.Delay(DurationMs);
+            if (toasts.Remove(toast))
+                StateHasChanged();
+        });
+    }
+
+    private void Close(Toast toast) => toasts.Remove(toast);
+
+    public void Dispose()
+    {
+        ErrorHub.ErrorOccurred -= OnError;
+        AppNotices.Raised -= OnNotice;
+    }
+}

@@ -1,0 +1,55 @@
+@using panialera.Services
+@inject UnsavedGuard Guard
+@implements IDisposable
+
+@if (visible)
+{
+    <Modal IsOpen="true"
+           Title="Cambios sin guardar"
+           ShowFooter="false"
+           CloseOnBackdropClick="true"
+           OnClose="OnDismiss">
+        <p class="mb-3">Tenés cambios sin guardar. ¿Querés guardarlos antes de continuar?</p>
+        <div class="d-flex gap-2 justify-content-end">
+            <button type="button" class="btn btn-outline-danger" @onclick="() => Choose(GuardChoice.Discard)">
+                No guardar
+            </button>
+            <button type="button" class="btn btn-primary" @onclick="() => Choose(GuardChoice.Save)">
+                Guardar
+            </button>
+        </div>
+    </Modal>
+}
+
+@code {
+    private bool visible;
+    private TaskCompletionSource<GuardChoice>? tcs;
+
+    protected override void OnInitialized()
+    {
+        Guard.DialogHandler = ShowAsync;
+    }
+
+    private Task<GuardChoice> ShowAsync()
+    {
+        tcs = new TaskCompletionSource<GuardChoice>();
+        visible = true;
+        StateHasChanged();
+        return tcs.Task;
+    }
+
+    private void Choose(GuardChoice choice)
+    {
+        visible = false;
+        tcs?.TrySetResult(choice);
+    }
+
+    // X / click outside / Escape => "No guardar" (discard and continue).
+    private void OnDismiss() => Choose(GuardChoice.Discard);
+
+    public void Dispose()
+    {
+        if (Guard.DialogHandler == ShowAsync)
+            Guard.DialogHandler = null;
+    }
+}
