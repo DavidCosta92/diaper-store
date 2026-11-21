@@ -1,0 +1,49 @@
+@using panialera.Models
+
+@if (!string.IsNullOrEmpty(Title))
+{
+    <h5 class="mt-4 mb-2 profit-subtitle">@Title</h5>
+}
+
+@if (Discounts.Count == 0)
+{
+    <p class="text-muted">Sin descuentos@(string.IsNullOrEmpty(Title) ? "" : $" ({Title})") en el período.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover zebra-striped">
+            <thead>
+                <tr>
+                    <th>Motivo</th>
+                    <th class="text-center">Cantidad</th>
+                    <th class="text-end">Total descontado</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Discounts)
+                {
+                    <tr>
+                        <td>@d.Reason</td>
+                        <td class="text-center">@d.Count</td>
+                        <td class="text-end">$@d.Total.ToString("F2")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr class="table-group-divider">
+                    <td colspan="2" class="fw-bold text-end">TOTAL</td>
+                    <td class="text-end fw-bold">$@Discounts.Sum(d => d.Total).ToString("F2")</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public List<DiscountReportRow> Discounts { get; set; } = new();
+}

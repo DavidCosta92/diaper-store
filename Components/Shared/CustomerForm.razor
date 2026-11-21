@@ -1,0 +1,158 @@
+@using panialera.Models
+@using panialera.Services
+@inject CustomerService CustomerService
+@inject UnsavedGuard Guard
+@implements IDisposable
+
+<div class="customer-form">
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label">Nombre *</label>
+            <input type="text" class="form-control" @bind="data.Name" @bind:event="oninput" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Teléfono</label>
+            <input type="text" class="form-control" @bind="data.Phone" @bind:event="oninput" />
+        </div>
+        <div class="col-md-12">
+            <label class="form-label">Dirección</label>
+            <input type="text" class="form-control" @bind="data.Address" @bind:event="oninput" />
+        </div>
+        <div class="col-md-12">
+            <label class="form-label">Extras</label>
+            <textarea class="form-control" rows="2" @bind="data.Extras" @bind:event="oninput"></textarea>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Opcional 1</label>
+            <input type="text" class="form-control" @bind="data.Optional1" @bind:event="oninput" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Opcional 2</label>
+            <input type="text" class="form-control" @bind="data.Optional2" @bind:event="oninput" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Opcional 3</label>
+            <input type="text" class="form-control" @bind="data.Optional3" @bind:event="oninput" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Opcional 4</label>
+            <input type="text" class="form-control" @bind="data.Optional4" @bind:event="oninput" />
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger py-2 mt-3 mb-0" role="alert">@error</div>
+    }
+
+    <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-success" @onclick="TrySaveAsync" disabled="@(!IsDirty)">
+            @(IsEditing ? "Guardar" : "Agregar cliente")
+        </button>
+        @if (ShowCancel)
+        {
+            <button class="btn btn-secondary" @onclick="Cancel">Cancelar</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Customer? EditingCustomer { get; set; }
+
+    [Parameter]
+    public bool ShowCancel { get; set; } = true;
+
+    [Parameter]
+    public EventCallback<Customer> OnSaved { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private Customer data = new();
+    private string error = string.Empty;
+    private IDisposable? guardReg;
+    private Customer _initial = new();
+
+    private bool IsEditing => EditingCustomer is { Id: > 0 };
+
+    public bool IsDirty =>
+        (data.Name ?? "") != (_initial.Name ?? "")
+        || (data.Phone ?? "") != (_initial.Phone ?? "")
+        || (data.Address ?? "") != (_initial.Address ?? "")
+        || (data.Extras ?? "") != (_initial.Extras ?? "")
+        || (data.Optional1 ?? "") != (_initial.Optional1 ?? "")
+        || (data.Optional2 ?? "") != (_initial.Optional2 ?? "")
+        || (data.Optional3 ?? "") != (_initial.Optional3 ?? "")
+        || (data.Optional4 ?? "") != (_initial.Optional4 ?? "");
+
+    protected override void OnInitialized()
+    {
+        guardReg = Guard.Register(() => IsDirty, TrySaveAsync, Reset);
+    }
+
+    private Customer? _loadedFor;
+
+    protected override void OnParametersSet()
+    {
+        // Only re-initialize when the item to edit changes, NOT on every parent re-render
+        // (otherwise what the user is typing would be wiped).
+        if (ReferenceEquals(EditingCustomer, _loadedFor))
+            return;
+        _loadedFor = EditingCustomer;
+        data = IsEditing ? Clone(EditingCustomer!) : new Customer();
+        Snapshot();
+    }
+
+    private static Customer Clone(Customer c) => new()
+    {
+        Id = c.Id,
+        Name = c.Name,
+        Phone = c.Phone,
+        Address = c.Address,
+        Extras = c.Extras,
+        Optional1 = c.Optional1,
+        Optional2 = c.Optional2,
+        Optional3 = c.Optional3,
+        Optional4 = c.Optional4,
+        CreatedAt = c.CreatedAt
+    };
+
+    private void Snapshot() => _initial = Clone(data);
+
+    private void Reset()
+    {
+        data = Clone(_initial);
+        error = string.Empty;
+        StateHasChanged();
+    }
+
+    public async Task<bool> TrySaveAsync()
+    {
+        error = string.Empty;
+
+        if (IsEditing)
+        {
+            var (ok, err) = await CustomerService.UpdateAsync(data, Clone(_initial));
+            if (!ok) { error = err ?? "No se pudo guardar."; StateHasChanged(); return false; }
+            Snapshot();
+            await OnSaved.InvokeAsync(data);
+        }
+        else
+        {
+            var (ok, err, customer) = await CustomerService.AddAsync(data);
+            if (!ok || customer == null) { error = err ?? "No se pudo crear."; StateHasChanged(); return false; }
+            data = new Customer();
+            Snapshot();
+            await OnSaved.InvokeAsync(customer);
+        }
+        return true;
+    }
+
+    private async Task Cancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+
+    public void Dispose() => guardReg?.Dispose();
+}

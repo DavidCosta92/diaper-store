@@ -1,0 +1,162 @@
+@using panialera.Models
+@using panialera.Services
+@inject ExpenseService ExpenseService
+@inject UnsavedGuard Guard
+@implements IDisposable
+
+<div class="expense-form">
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label">Nombre *</label>
+            <input type="text" class="form-control" @bind="data.Name" @bind:event="oninput" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Valor *</label>
+            <input type="number" step="0.01" class="form-control" @bind="data.Amount" @bind:event="oninput" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Tipo de pago</label>
+            <select class="form-select" @bind="data.PaymentType">
+                <option value="@PaymentType.Cash">Efectivo</option>
+                <option value="@PaymentType.MercadoPago">Mercado Pago</option>
+            </select>
+        </div>
+        <div class="col-md-9">
+            <label class="form-label">Descripción</label>
+            <textarea class="form-control" rows="2" @bind="data.Description" @bind:event="oninput"></textarea>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Fecha</label>
+            <input type="date" class="form-control" @bind="date" />
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger py-2 mt-3 mb-0" role="alert">@error</div>
+    }
+
+    <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-success" @onclick="TrySaveAsync" disabled="@(!IsDirty)">
+            @(IsEditing ? "Guardar" : "Agregar egreso")
+        </button>
+        @if (ShowCancel)
+        {
+            <button class="btn btn-secondary" @onclick="Cancel">Cancelar</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Expense? EditingExpense { get; set; }
+
+    [Parameter]
+    public bool ShowCancel { get; set; } = true;
+
+    [Parameter]
+    public EventCallback OnSaved { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private Expense data = new();
+    private DateTime date = DateTime.Today;
+    private string error = string.Empty;
+    private IDisposable? guardReg;
+
+    private Expense _initial = new();
+    private DateTime _initialDate = DateTime.Today;
+
+    private bool IsEditing => EditingExpense is { Id: > 0 };
+
+    public bool IsDirty =>
+        (data.Name ?? "") != (_initial.Name ?? "")
+        || (data.Description ?? "") != (_initial.Description ?? "")
+        || data.Amount != _initial.Amount
+        || data.PaymentType != _initial.PaymentType
+        || date.Date != _initialDate.Date;
+
+    protected override void OnInitialized()
+    {
+        guardReg = Guard.Register(() => IsDirty, TrySaveAsync, Reset);
+    }
+
+    private Expense? _loadedFor;
+
+    protected override void OnParametersSet()
+    {
+        // Only re-initialize when the item to edit changes (not on every re-render).
+        if (ReferenceEquals(EditingExpense, _loadedFor))
+            return;
+        _loadedFor = EditingExpense;
+
+        if (IsEditing)
+        {
+            data = Clone(EditingExpense!);
+            date = EditingExpense!.Date.Date;
+        }
+        else
+        {
+            data = new Expense();
+            date = DateTime.Today;
+        }
+        Snapshot();
+    }
+
+    private static Expense Clone(Expense e) => new()
+    {
+        Id = e.Id,
+        Name = e.Name,
+        Description = e.Description,
+        Amount = e.Amount,
+        Date = e.Date,
+        PaymentType = e.PaymentType
+    };
+
+    private void Snapshot()
+    {
+        _initial = Clone(data);
+        _initialDate = date;
+    }
+
+    private void Reset()
+    {
+        data = Clone(_initial);
+        date = _initialDate;
+        error = string.Empty;
+        StateHasChanged();
+    }
+
+    public async Task<bool> TrySaveAsync()
+    {
+        error = string.Empty;
+        // Keep the time of day when editing; use the current time for a new expense.
+        data.Date = date.Date + (IsEditing ? EditingExpense!.Date.TimeOfDay : DateTime.Now.TimeOfDay);
+
+        if (IsEditing)
+        {
+            var (ok, err) = await ExpenseService.UpdateAsync(data);
+            if (!ok) { error = err ?? "No se pudo guardar."; StateHasChanged(); return false; }
+            Snapshot();
+        }
+        else
+        {
+            var (ok, err) = await ExpenseService.AddAsync(data);
+            if (!ok) { error = err ?? "No se pudo crear."; StateHasChanged(); return false; }
+            data = new Expense();
+            date = DateTime.Today;
+            Snapshot();
+        }
+
+        await OnSaved.InvokeAsync();
+        return true;
+    }
+
+    private async Task Cancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+
+    public void Dispose() => guardReg?.Dispose();
+}

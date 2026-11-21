@@ -1,0 +1,156 @@
+@using panialera.Models
+@using panialera.Services
+@inject CustomerService CustomerService
+@inject UnsavedGuard Guard
+
+<div class="customer-selector">
+    @if (Selected != null)
+    {
+        <div class="selected-customer">
+            <span>
+                <strong>@Selected.Name</strong>
+                @if (!string.IsNullOrWhiteSpace(Selected.Phone))
+                {
+                    <span class="text-muted">· @Selected.Phone</span>
+                }
+            </span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Clear">Quitar</button>
+        </div>
+    }
+    else
+    {
+        <div class="customer-search-row">
+            <div class="search-wrapper customer-search-wrapper">
+                @* Closes on a click outside or with Escape; a click inside the list does not close it
+                   (same as the sale's product search). *@
+                <input type="text" class="form-control" placeholder="Buscar cliente por nombre o teléfono..."
+                       @bind="search" @bind:event="oninput" @bind:after="Open"
+                       @onfocus="Open" @onblur="Close" @onkeydown="KeyDown" />
+                @if (open && !string.IsNullOrWhiteSpace(search))
+                {
+                    var matches = Filtered;
+                    <div class="search-results-floating" @onmouseenter="MouseEntered" @onmouseleave="MouseLeft">
+                        @if (matches.Count == 0)
+                        {
+                            <p class="text-muted mb-0 p-2">Sin resultados. Podés crear uno nuevo.</p>
+                        }
+                        else
+                        {
+                            <table class="table table-sm table-hover mb-0">
+                                <tbody>
+                                    @foreach (var cl in matches)
+                                    {
+                                        <tr class="search-result-row" @onclick="() => Select(cl)">
+                                            <td>@cl.Name</td>
+                                            <td class="text-muted">@cl.Phone</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                }
+            </div>
+            <button type="button" class="btn btn-success customer-new-btn" @onclick="OpenModal">+ Nuevo</button>
+        </div>
+    }
+</div>
+
+<Modal IsOpen="showModal"
+       Title="Nuevo Cliente"
+       ShowFooter="false"
+       OnClose="RequestClose">
+    <CustomerForm ShowCancel="true"
+                 OnSaved="OnNewSaved"
+                 OnCancel="ForceClose" />
+</Modal>
+
+@code {
+    [Parameter]
+    public Customer? Selected { get; set; }
+
+    [Parameter]
+    public EventCallback<Customer?> SelectedChanged { get; set; }
+
+    private List<Customer> customers = new();
+    private string search = string.Empty;
+    private bool open;
+    private bool showModal = false;
+
+    private List<Customer> Filtered =>
+        customers
+            .Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                     || (c.Phone?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+            .Take(20)
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        customers = await CustomerService.GetAllAsync();
+    }
+
+    private bool focused;
+    private bool mouseOverList;
+
+    private void Open()
+    {
+        open = true;
+        focused = true;
+    }
+
+    private void Close()
+    {
+        focused = false;
+        if (!mouseOverList)
+            open = false;
+    }
+
+    private void MouseEntered() => mouseOverList = true;
+
+    private void MouseLeft()
+    {
+        mouseOverList = false;
+        if (!focused)
+            open = false;
+    }
+
+    private void KeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            open = false;
+    }
+
+    private async Task Select(Customer customer)
+    {
+        search = string.Empty;
+        open = false;
+        mouseOverList = false;
+        await SelectedChanged.InvokeAsync(customer);
+    }
+
+    private async Task Clear()
+    {
+        search = string.Empty;
+        await SelectedChanged.InvokeAsync(null);
+    }
+
+    private void OpenModal() => showModal = true;
+
+    // X / click outside / Escape: if the customer form has changes, ask first.
+    private async Task RequestClose()
+    {
+        if (!await Guard.TryLeaveAsync())
+            return;
+        showModal = false;
+    }
+
+    // The form's explicit "Cancelar": close without asking (intentional discard).
+    private void ForceClose() => showModal = false;
+
+    private async Task OnNewSaved(Customer customer)
+    {
+        customers = await CustomerService.GetAllAsync();
+        showModal = false;
+        await SelectedChanged.InvokeAsync(customers.FirstOrDefault(c => c.Id == customer.Id) ?? customer);
+    }
+}

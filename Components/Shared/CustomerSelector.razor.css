@@ -1,0 +1,51 @@
+/* Relative container for the floating dropdown. */
+.search-wrapper {
+    position: relative;
+}
+
+.search-results-floating {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    margin-top: 2px;
+    max-height: 260px;
+    overflow-y: auto;
+    background-color: #fff;
+    border: 1px solid #bcc4cc;
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+}
+
+.search-results-floating table {
+    font-size: 0.85rem;
+}
+
+.search-result-row {
+    cursor: pointer;
+}
+
+.customer-search-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.customer-search-wrapper {
+    flex: 1;
+}
+
+.customer-new-btn {
+    white-space: nowrap;
+}
+
+.selected-customer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid #cfe6e4;
+    background-color: #eef9f8;
+    border-radius: 6px;
+    padding: 8px 12px;
+}

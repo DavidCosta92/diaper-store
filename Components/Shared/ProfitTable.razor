@@ -1,0 +1,66 @@
+@using panialera.Models
+
+@if (!string.IsNullOrEmpty(Title))
+{
+    <h5 class="mt-4 mb-2 profit-subtitle">@Title</h5>
+}
+
+@if (Rows.Count == 0)
+{
+    <p class="text-muted">Sin ventas@(string.IsNullOrEmpty(Title) ? "" : $" ({Title})") para los filtros.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover zebra-striped">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th class="text-end">Precio Compra (prom.)</th>
+                    <th class="text-end">Precio Venta (prom.)</th>
+                    <th class="text-end">Ganancia x Item</th>
+                    <th class="text-center">Items Vendidos</th>
+                    <th class="text-end">Facturación</th>
+                    <th class="text-end">Ganancia Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Rows)
+                {
+                    <tr>
+                        <td>@row.ProductName - @row.ProductDescription</td>
+                        <td class="text-end">$@row.AvgPurchasePrice.ToString("F2")</td>
+                        <td class="text-end">$@row.AvgSalePrice.ToString("F2")</td>
+                        <td class="text-end @(row.ProfitPerUnit >= 0 ? "text-success" : "text-danger")">
+                            $@row.ProfitPerUnit.ToString("F2")
+                        </td>
+                        <td class="text-center">@row.UnitsSold</td>
+                        <td class="text-end">$@row.TotalRevenue.ToString("F2")</td>
+                        <td class="text-end fw-bold @(row.TotalProfit >= 0 ? "text-success" : "text-danger")">
+                            $@row.TotalProfit.ToString("F2")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr class="table-group-divider">
+                    <td class="fw-bold">TOTALES</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td class="text-center fw-bold">@Rows.Sum(r => r.UnitsSold)</td>
+                    <td class="text-end fw-bold">$@Rows.Sum(r => r.TotalRevenue).ToString("F2")</td>
+                    <td class="text-end fw-bold">$@Rows.Sum(r => r.TotalProfit).ToString("F2")</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public List<ProfitReportRow> Rows { get; set; } = new();
+}

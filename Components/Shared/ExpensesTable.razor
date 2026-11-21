@@ -1,0 +1,62 @@
+@using panialera.Models
+
+@if (!string.IsNullOrEmpty(Title))
+{
+    <h5 class="mt-4 mb-2 profit-subtitle">@Title</h5>
+}
+
+@if (Expenses.Count == 0)
+{
+    <p class="text-muted">Sin egresos@(string.IsNullOrEmpty(Title) ? "" : $" ({Title})") en el período.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover zebra-striped">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Nombre</th>
+                    <th>Descripción</th>
+                    <th>Tipo de pago</th>
+                    <th class="text-end">Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in Expenses)
+                {
+                    <tr>
+                        <td>@e.Date.ToString("dd/MM/yyyy")</td>
+                        <td>@e.Name</td>
+                        <td>@(string.IsNullOrWhiteSpace(e.Description) ? "—" : e.Description)</td>
+                        <td>
+                            @if (e.PaymentType == PaymentType.MercadoPago)
+                            {
+                                <span class="badge badge-mp">Mercado Pago</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-cash">Efectivo</span>
+                            }
+                        </td>
+                        <td class="text-end">$@e.Amount.ToString("F2")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr class="table-group-divider">
+                    <td colspan="4" class="fw-bold text-end">TOTAL</td>
+                    <td class="text-end fw-bold">$@Expenses.Sum(e => e.Amount).ToString("F2")</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public List<Expense> Expenses { get; set; } = new();
+}
