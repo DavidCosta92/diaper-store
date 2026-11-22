@@ -1,0 +1,16 @@
+.account-container {
+    padding: 20px;
+}
+
+.account-card {
+    max-width: 420px;
+    border: 1px solid #ddd;
+    padding: 25px;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+.account-card h4 {
+    margin-bottom: 20px;
+    font-weight: 600;
+}

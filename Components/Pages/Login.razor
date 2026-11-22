@@ -1,0 +1,65 @@
+@page "/login"
+@layout Components.Layout.LoginLayout
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Authorization
+@using panialera.Auth
+@using panialera.Services
+@inject AuthService AuthService
+@inject AppAuthenticationStateProvider AuthState
+@inject NavigationManager Nav
+
+<div class="login-card">
+    <h3 class="mb-4 text-center brand-title">Cariñitos</h3>
+
+    <div class="form-group mb-3">
+        <label for="username" class="form-label">Nombre</label>
+        <input type="text" class="form-control" id="username" @bind="userName" @bind:event="oninput" @onkeydown="OnKeyDown" />
+    </div>
+
+    <div class="form-group mb-3">
+        <label for="password" class="form-label">Clave</label>
+        <input type="password" inputmode="numeric" class="form-control" id="password"
+               @bind="password" @bind:event="oninput" @onkeydown="OnKeyDown" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger py-2" role="alert">@error</div>
+    }
+
+    <button class="btn btn-primary w-100" @onclick="DoLogin" disabled="@loading">
+        @(loading ? "Ingresando..." : "Ingresar")
+    </button>
+</div>
+
+@code {
+    private string userName = string.Empty;
+    private string password = string.Empty;
+    private string error = string.Empty;
+    private bool loading = false;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await DoLogin();
+        }
+    }
+
+    private async Task DoLogin()
+    {
+        error = string.Empty;
+        loading = true;
+
+        var user = await AuthService.ValidateLoginAsync(userName.Trim(), password);
+        if (user == null)
+        {
+            error = "Usuario o clave incorrectos.";
+            loading = false;
+            return;
+        }
+
+        AuthState.SignIn(user);
+        Nav.NavigateTo("");
+    }
+}

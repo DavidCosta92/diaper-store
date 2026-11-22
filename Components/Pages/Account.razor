@@ -1,0 +1,82 @@
+@page "/account"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using panialera.Auth
+@using panialera.Services
+@inject AuthService AuthService
+@inject AppAuthenticationStateProvider AuthState
+
+<div class="account-container">
+    <h1>Mi Cuenta</h1>
+
+    <div class="account-card">
+        <h4>Cambiar Contraseña</h4>
+
+        <div class="form-group mb-3">
+            <label for="current-password" class="form-label">Contraseña actual</label>
+            <input type="password" class="form-control" id="current-password" @bind="currentPassword" @bind:event="oninput" />
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="new-password" class="form-label">Nueva contraseña</label>
+            <input type="password" class="form-control" id="new-password" @bind="newPassword" @bind:event="oninput" />
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="repeat-password" class="form-label">Repetir nueva contraseña</label>
+            <input type="password" class="form-control" id="repeat-password" @bind="repeatPassword" @bind:event="oninput" />
+        </div>
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div class="alert @(isError ? "alert-danger" : "alert-success") py-2" role="alert">
+                @message
+            </div>
+        }
+
+        <button class="btn btn-primary" @onclick="ChangePassword">Guardar</button>
+    </div>
+</div>
+
+@code {
+    private string currentPassword = string.Empty;
+    private string newPassword = string.Empty;
+    private string repeatPassword = string.Empty;
+    private string message = string.Empty;
+    private bool isError = false;
+
+    private async Task ChangePassword()
+    {
+        message = string.Empty;
+
+        if (newPassword != repeatPassword)
+        {
+            isError = true;
+            message = "Las contraseñas nuevas no coinciden.";
+            return;
+        }
+
+        var userId = AuthState.CurrentUserId;
+        if (userId == null)
+        {
+            isError = true;
+            message = "Sesión no válida.";
+            return;
+        }
+
+        var (ok, err) = await AuthService.ChangePasswordAsync(userId.Value, currentPassword, newPassword);
+        if (ok)
+        {
+            isError = false;
+            message = "Contraseña actualizada correctamente.";
+            currentPassword = string.Empty;
+            newPassword = string.Empty;
+            repeatPassword = string.Empty;
+        }
+        else
+        {
+            isError = true;
+            message = err ?? "No se pudo cambiar la contraseña.";
+        }
+    }
+}
