@@ -1,0 +1,206 @@
+.sale-form-container {
+    width: 100%;
+}
+
+.sale-form-container h4 {
+    margin-bottom: 20px;
+}
+
+/* Product search: no outer frame so the input border is not doubled. */
+.product-search-box {
+    padding: 0;
+}
+
+/* Relative container to position the floating results dropdown. */
+.search-wrapper {
+    position: relative;
+}
+
+/* Search results as a floating dropdown (does not push the content down). */
+.search-results-floating {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    margin-top: 2px;
+    max-height: 260px;
+    overflow-y: auto;
+    background-color: #fff;
+    border: 1px solid #bcc4cc;
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+}
+
+.search-results-floating table {
+    font-size: 0.85rem;
+}
+
+.search-result-row {
+    cursor: pointer;
+}
+
+/* Divider between the selection and the add button */
+.section-divider {
+    border: none;
+    border-top: 1px solid #ccc;
+    margin: 0;
+}
+
+.btn-add-item {
+    font-weight: bold;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, #9b72c6, #875fb4);
+}
+
+/* Items in this sale */
+.current-items {
+    border: 1px solid #ccc;
+    background-color: #fff;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.current-items h5 {
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.items-table {
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+.items-table th {
+    background-color: #f5f5f5;
+}
+
+.items-table .btn {
+    padding: 0 6px;
+    line-height: 1.4;
+}
+
+/* Sale summary (subtotal / discount / total), right-aligned.
+   Amounts sit in a fixed right column so they line up. */
+.sale-summary {
+    width: 520px;
+    max-width: 100%;
+    margin-left: auto;
+    background-color: #fdeef4;
+    border: 1px solid #f3c6da;
+    border-radius: 6px;
+    padding: 12px 15px;
+    margin-bottom: 1rem;
+}
+
+.summary-row {
+    display: grid;
+    grid-template-columns: 1fr 130px;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+}
+
+.summary-label {
+    text-align: right;
+    font-weight: 600;
+}
+
+.summary-amount {
+    text-align: right;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.summary-total-row {
+    border-top: 1px solid #f3c6da;
+    margin-top: 4px;
+    padding-top: 8px;
+    font-size: 1.15rem;
+}
+
+.summary-total-row .total-amount {
+    color: var(--carinitos-pink-dark);
+    font-weight: 700;
+}
+
+/* Discount row: everything aligned to the top (inputs and negative amount). */
+.summary-discount-row {
+    align-items: start;
+}
+
+.summary-discount-row .discount-amount {
+    color: #c0392b;
+    padding-top: 6px;
+}
+
+/* Discount controls (reason + value + % check), aligned right and top. */
+.discount-controls {
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.discount-desc {
+    max-width: 190px;
+}
+
+/* Value + % checkbox side by side (the % to the right of the input). */
+.discount-value-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.discount-num {
+    width: 85px;
+}
+
+.discount-pct-check {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    margin-bottom: 0;
+}
+
+.date-input {
+    max-width: 190px;
+}
+
+.save-btn {
+    width: 30%;
+}
+
+/* Mercado Pago checkbox: bigger and blue. */
+.mp-check-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mp-check {
+    width: 1.5em;
+    height: 1.5em;
+    margin-top: 0;
+    cursor: pointer;
+    border-color: #009ee3;
+}
+
+.mp-check:checked {
+    background-color: #009ee3;
+    border-color: #009ee3;
+}
+
+.mp-check:focus {
+    border-color: #009ee3;
+    box-shadow: 0 0 0 0.2rem rgba(0, 158, 227, 0.35);
+}
+
+.mp-check-label {
+    font-size: 1.05rem;
+    color: #0077ad;
+    cursor: pointer;
+}

@@ -1,0 +1,136 @@
+.sales-container {
+    padding: 20px;
+}
+
+.sales-form-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    background-color: #f9f9f9;
+}
+
+.sales-table-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+.sales-table-section h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+table thead {
+    background-color: #f5f5f5;
+    font-weight: 600;
+}
+
+table tbody tr:hover {
+    background-color: #e8e8e8;
+}
+
+.detail-row {
+    background-color: #f5f5f5;
+}
+
+.day-separator td {
+    background-color: #343a40;
+    color: #fff;
+    font-weight: 600;
+    text-transform: capitalize;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.day-separator .chevron {
+    margin-right: 8px;
+}
+
+.day-separator .day-count {
+    font-weight: 400;
+    font-size: 0.85rem;
+    opacity: 0.75;
+    margin-left: 8px;
+    text-transform: none;
+}
+
+.detail-table {
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    font-size: 0.88rem;
+}
+
+.sale-voided td {
+    color: #999;
+    text-decoration: line-through;
+    background-color: #f8f9fa;
+}
+
+.sale-voided td .badge {
+    text-decoration: none;
+    /* Same color but much fainter on voided sales. */
+    opacity: 0.4;
+}
+
+.chevron-btn {
+    padding: 0 6px;
+    text-decoration: none;
+    color: #333;
+}
+
+.chevron {
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+
+.chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.sale-details {
+    padding: 15px;
+    background-color: #fafafa;
+    border-left: 4px solid #2196f3;
+}
+
+.sale-details h6 {
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.sale-details ul {
+    margin-bottom: 0;
+    padding-left: 20px;
+}
+
+.sale-details li {
+    margin-bottom: 8px;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.badge {
+    padding: 0.5em 0.75em;
+    font-size: 0.85em;
+}
+
+.sale-from-phone {
+    font-size: 0.9em;
+    line-height: 1;
+}

@@ -1,0 +1,599 @@
+@using panialera.Auth
+@using panialera.Models
+@using panialera.Services
+@inject ProductService ProductService
+@inject SaleService SaleService
+@inject DistributorService DistributorService
+@inject AppAuthenticationStateProvider AuthState
+@inject UnsavedGuard Guard
+@implements IDisposable
+
+<div class="sale-form-container">
+    <h4 class="fw-bold">Crear Nueva Venta</h4>
+
+    <div class="product-search-box mb-3">
+        <div class="search-wrapper">
+            @* The list closes on a click outside or with Escape, and comes back when the search
+               box is focused again. If the box loses focus because of a click INSIDE the list
+               (on "Elegir"), it stays open: the mouse is known to be over the list. Otherwise
+               the click on "Elegir" would arrive after the list closed and select nothing. *@
+            <input type="text" class="form-control" id="product-search"
+                   placeholder="Buscar producto por código, nombre o descripción..."
+                   @bind="searchTerm" @bind:event="oninput" @bind:after="OpenSearch"
+                   @onfocus="OpenSearch" @onblur="CloseSearch" @onkeydown="SearchKeyDown" />
+
+            @if (searchOpen && !string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var matches = FilteredProducts;
+                <div class="search-results-floating" @onmouseenter="MouseEnteredList" @onmouseleave="MouseLeftList">
+                    @if (matches.Count == 0)
+                    {
+                        <p class="text-muted mb-0 p-2">Sin resultados para "@searchTerm".</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Descripción</th>
+                                    <th class="text-end">Precio</th>
+                                    <th class="text-center">Stock</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in matches)
+                                {
+                                    <tr class="search-result-row @(p.Stock > 0 ? "" : "out-of-stock")" @ondblclick="() => SelectFromSearch(p)"
+                                        title="@(p.Stock > 0 ? "Doble clic para elegir" : "Sin stock")">
+                                        <td>
+                                            <span class="d-inline-flex align-items-center gap-2">
+                                                <ProductImage Src="@imageOf(p)" Height="34" Title="@p.Name" />
+                                                @p.Name
+                                            </span>
+                                        </td>
+                                        <td>@p.Description</td>
+                                        <td class="text-end">$@p.SalePrice.ToString("F2")</td>
+                                        <td class="text-center">@p.Stock</td>
+                                        <td class="text-end">
+                                            @if (p.Stock > 0)
+                                            {
+                                                <button class="btn btn-sm btn-outline-primary" @onclick="() => SelectFromSearch(p)">Elegir</button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-outline-secondary" disabled>Sin stock</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (selectedProduct != null)
+    {
+        <div class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label">Producto seleccionado</label>
+                <div class="d-flex align-items-center gap-2">
+                    <ProductImage Src="@imageOf(selectedProduct)" Height="34" Title="@selectedProduct.Name" />
+                    <input type="text" class="form-control" value="@($"{selectedProduct.Name} - {selectedProduct.Description}")" disabled />
+                    <button type="button" class="btn btn-outline-secondary remove-selection" title="Sacar el producto elegido" @onclick="ClearSelection">Quitar</button>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <label for="quantity" class="form-label">
+                    Cantidad (Disp.: @selectedProduct.Stock)
+                </label>
+                @* What the user types is kept as is; when it is invalid it turns red and blocks
+                   adding and saving. The field's spinner (min/max) stays within 1..stock. *@
+                <input type="number" class="form-control @(QuantityInvalid ? "is-invalid" : "")" id="quantity"
+                       @bind="currentItemQuantity"
+                       @bind:event="oninput"
+                       @bind:after="ClearError"
+                       min="1"
+                       max="@selectedProduct.Stock" />
+                @if (QuantityInvalid)
+                {
+                    <div class="invalid-feedback d-block">@QuantityMessage</div>
+                }
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Subtotal</label>
+                <input type="text" class="form-control" value="@($"${(selectedProduct.SalePrice * currentItemQuantity).ToString("F2")}")" disabled />
+            </div>
+        </div>
+    }
+
+    <hr class="section-divider mt-2" />
+
+    <div class="d-flex justify-content-start">
+        <button class="btn btn-success btn-add-item" title="Agregar item a la venta" @onclick="AddItemToSale" disabled="@(!CanAddItem())">+ (Añadir ítem)</button>
+    </div>
+
+    @if (currentItems.Count > 0)
+    {
+        <div class="current-items">
+            <h5>Items en esta venta</h5>
+            <table class="table table-striped items-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Descripción</th>
+                        <th class="text-center">Cantidad</th>
+                        <th class="text-end">Subtotal</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var (item, index) in currentItems.Select((x, i) => (x, i)))
+                    {
+                        <tr>
+                            <td>
+                                <span class="d-inline-flex align-items-center gap-2">
+                                    <ProductImage Src="@ImageOfItem(item)" Height="34" Title="@item.ProductName" />
+                                    @item.ProductName
+                                </span>
+                            </td>
+                            <td>@item.ProductDescription</td>
+                            <td class="text-center">@item.Quantity</td>
+                            <td class="text-end">$@((item.SalePrice * item.Quantity).ToString("F2"))</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-secondary" title="Aumentar" @onclick="() => IncreaseQty(item)">▲</button>
+                                <button class="btn btn-sm btn-outline-secondary" title="Disminuir" @onclick="() => DecreaseQty(index)">▼</button>
+                                <button class="btn btn-sm btn-outline-danger" title="Quitar" @onclick="() => RemoveItem(index)">×</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="sale-summary">
+        <div class="summary-row">
+            <span class="summary-label">Subtotal</span>
+            <span class="summary-amount">$@Subtotal.ToString("F2")</span>
+        </div>
+
+        <div class="summary-row summary-discount-row">
+            <div class="discount-controls">
+                <input type="text" class="form-control form-control-sm discount-desc"
+                       placeholder="Motivo del descuento (opcional)"
+                       @bind="discountReason" @bind:event="oninput" />
+                <div class="discount-value-wrap">
+                    <input type="number" step="0.01" min="0" max="@DiscountMax" class="form-control form-control-sm discount-num"
+                           @bind="DiscountValueInput" @bind:event="oninput" />
+                    <div class="form-check discount-pct-check">
+                        <input class="form-check-input" type="checkbox" id="discount-pct" @bind="DiscountIsPercentageInput" />
+                        <label class="form-check-label" for="discount-pct">%</label>
+                    </div>
+                </div>
+            </div>
+            <span class="summary-amount discount-amount">
+                @if (DiscountAmount > 0)
+                {
+                    <text>-$@DiscountAmount.ToString("F2")</text>
+                }
+                else
+                {
+                    <text>$0.00</text>
+                }
+            </span>
+        </div>
+
+        <div class="summary-row summary-total-row">
+            <span class="summary-label">Total</span>
+            <span class="summary-amount total-amount">$@Total.ToString("F2")</span>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end mb-3">
+        <div class="form-check mp-check-group">
+            <input class="form-check-input mp-check" type="checkbox" id="is-mercado-pago" @bind="isMercadoPago" />
+            <label class="form-check-label mp-check-label" for="is-mercado-pago">
+                Mercado Pago
+            </label>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Cliente (opcional)</label>
+        <CustomerSelector @bind-Selected="selectedCustomer" />
+    </div>
+
+    <div class="mb-3">
+        <label for="sale-date" class="form-label">Fecha</label>
+        <input type="date" class="form-control date-input" id="sale-date" @bind="saleDate" />
+    </div>
+
+    <div class="d-flex justify-content-center mb-3">
+        <button class="btn btn-primary save-btn" @onclick="SaveClick" disabled="@(!CanCompleteSale())">
+            Guardar
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(saleError))
+    {
+        <div class="alert alert-danger mt-3" role="alert">
+            @saleError
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback<Sale> OnSaleCreated { get; set; }
+
+    private List<Product> products = new();
+    private Func<Product, string?> imageOf = _ => null; // manual photo or the distributor's
+
+    private string? ImageOfItem(SaleItem item)
+    {
+        var product = products.FirstOrDefault(p => p.Id == item.ProductId);
+        return product == null ? null : imageOf(product);
+    }
+
+    private Product? selectedProduct;
+    private string searchTerm = string.Empty;
+    private bool searchOpen;
+    private DateTime saleDate = DateTime.Today;
+    private int currentItemQuantity = 1;
+    private bool isMercadoPago = false;
+    private string saleError = string.Empty;
+    private List<SaleItem> currentItems = new();
+    private IDisposable? guardReg;
+
+    // Customer of the sale (optional).
+    private Customer? selectedCustomer;
+
+    // Discount (optional).
+    private decimal discountValue = 0;
+    private bool discountIsPercentage = false;
+    private string discountReason = string.Empty;
+
+    // The sale is "dirty" once the user started building it (items, selected product or
+    // customer, discount or payment method touched).
+    public bool IsDirty =>
+        currentItems.Count > 0
+        || selectedProduct != null
+        || selectedCustomer != null
+        || discountValue != 0
+        || !string.IsNullOrWhiteSpace(discountReason)
+        || isMercadoPago;
+
+    // Search by code, name or description (contains, case-insensitive).
+    private List<Product> FilteredProducts =>
+        products
+            .Where(p => p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                     || p.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                     || (p.Code?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+            .Where(p => currentItems.All(i => i.ProductId != p.Id)) // one product, one row
+            .ToList();
+
+    // Always-visible subtotal: the items already added plus the pending selection (not yet
+    // added with "+"), so a single-item sale is reflected too.
+    private decimal Subtotal
+    {
+        get
+        {
+            var total = currentItems.Sum(i => i.SalePrice * i.Quantity);
+            if (selectedProduct != null && CanAddItem())
+            {
+                total += selectedProduct.SalePrice * currentItemQuantity;
+            }
+            return total;
+        }
+    }
+
+    // Discount amount in money (capped between 0 and the subtotal).
+    private decimal DiscountAmount
+    {
+        get
+        {
+            if (discountValue <= 0)
+                return 0;
+            var subtotal = Subtotal;
+            var amount = discountIsPercentage ? subtotal * (discountValue / 100m) : discountValue;
+            if (amount < 0) amount = 0;
+            if (amount > subtotal) amount = subtotal;
+            return amount;
+        }
+    }
+
+    private decimal Total => Subtotal - DiscountAmount;
+
+    // Discount cap: 100 for a percentage, the subtotal for a fixed amount.
+    private decimal DiscountMax => discountIsPercentage ? 100m : Subtotal;
+
+    // Value input with a clamp: it cannot go above the cap.
+    private decimal DiscountValueInput
+    {
+        get => discountValue;
+        set
+        {
+            var v = value < 0 ? 0 : value;
+            if (v > DiscountMax) v = DiscountMax;
+            discountValue = v;
+        }
+    }
+
+    // Toggling % clamps the value again to the new cap.
+    private bool DiscountIsPercentageInput
+    {
+        get => discountIsPercentage;
+        set
+        {
+            discountIsPercentage = value;
+            DiscountValueInput = discountValue;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        guardReg = Guard.Register(() => IsDirty, CompleteSale, DiscardForm);
+        imageOf = await DistributorService.GetProductUrlResolverAsync();
+        products = await ProductService.GetAllAsync();
+        AppNotices.SalesChanged += OnSalesChanged;
+    }
+
+    // A sale made on the phone changed the stock. Saving validates against the database anyway.
+    private void OnSalesChanged() => _ = InvokeAsync(async () =>
+    {
+        products = await ProductService.GetAllAsync();
+        StateHasChanged();
+    });
+
+    // Discards the sale in progress (for the unsaved-changes guard).
+    private void DiscardForm()
+    {
+        currentItems.Clear();
+        selectedProduct = null;
+        searchTerm = string.Empty;
+        currentItemQuantity = 1;
+        isMercadoPago = false;
+        saleDate = DateTime.Today;
+        selectedCustomer = null;
+        discountValue = 0;
+        discountIsPercentage = false;
+        discountReason = string.Empty;
+        saleError = string.Empty;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        guardReg?.Dispose();
+        AppNotices.SalesChanged -= OnSalesChanged;
+    }
+
+    private bool searchFocused;
+    private bool mouseOverList;
+
+    private void OpenSearch()
+    {
+        searchOpen = true;
+        searchFocused = true;
+    }
+
+    // Click outside: the search box loses focus. If the click was on the list, it stays open.
+    private void CloseSearch()
+    {
+        searchFocused = false;
+        if (!mouseOverList)
+            searchOpen = false;
+    }
+
+    private void MouseEnteredList() => mouseOverList = true;
+
+    // The user clicked on the list (without picking) and the mouse leaves: that is "outside" now.
+    private void MouseLeftList()
+    {
+        mouseOverList = false;
+        if (!searchFocused)
+            searchOpen = false;
+    }
+
+    private void SearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            searchOpen = false;
+    }
+
+    private void SelectFromSearch(Product product)
+    {
+        if (product.Stock <= 0)
+            return;
+        selectedProduct = product;
+        currentItemQuantity = 1;
+        saleError = string.Empty;
+        searchTerm = string.Empty;
+        searchOpen = false;
+        mouseOverList = false;
+    }
+
+    // Inline validation of the typed quantity (it is not corrected: the user is told).
+    private bool QuantityInvalid => selectedProduct != null && !CanAddItem();
+
+    private string QuantityMessage => currentItemQuantity < 1
+        ? "La cantidad tiene que ser al menos 1."
+        : $"No hay tanto stock: hay {selectedProduct?.Stock}.";
+
+    private void ClearError() => saleError = string.Empty;
+
+    private bool CanAddItem()
+    {
+        return selectedProduct != null &&
+               currentItemQuantity > 0 &&
+               currentItemQuantity <= selectedProduct.Stock;
+    }
+
+    // Saving can be attempted whenever there is something to sell.
+    private bool CanCompleteSale() => currentItems.Count > 0 || selectedProduct != null;
+
+    private void ClearSelection()
+    {
+        selectedProduct = null;
+        currentItemQuantity = 1;
+        saleError = string.Empty;
+    }
+
+    // Moves the selection to the list. Products already added do not show up in the search,
+    // so each product stays on a single row.
+    private void AddSelectionToItems()
+    {
+        currentItems.Add(new SaleItem
+        {
+            ProductId = selectedProduct!.Id,
+            ProductName = selectedProduct.Name,
+            ProductDescription = selectedProduct.Description,
+            Quantity = currentItemQuantity,
+            SalePrice = selectedProduct.SalePrice,
+            PurchasePrice = selectedProduct.PurchasePrice,
+            CreatedAt = DateTime.Now
+        });
+
+        selectedProduct = null;
+        currentItemQuantity = 1;
+    }
+
+    private void AddItemToSale()
+    {
+        if (!CanAddItem())
+            return;
+
+        AddSelectionToItems();
+        saleError = string.Empty;
+    }
+
+    private void IncreaseQty(SaleItem item)
+    {
+        var product = products.FirstOrDefault(p => p.Id == item.ProductId);
+        var maxStock = product?.Stock ?? item.Quantity;
+        if (item.Quantity < maxStock)
+        {
+            item.Quantity++;
+        }
+    }
+
+    private void DecreaseQty(int index)
+    {
+        if (index < 0 || index >= currentItems.Count)
+            return;
+
+        if (currentItems[index].Quantity > 1)
+        {
+            currentItems[index].Quantity--;
+        }
+        else
+        {
+            currentItems.RemoveAt(index);
+        }
+    }
+
+    private void RemoveItem(int index)
+    {
+        if (index >= 0 && index < currentItems.Count)
+        {
+            currentItems.RemoveAt(index);
+        }
+    }
+
+    private async Task SaveClick() => await CompleteSale();
+
+    private async Task<bool> CompleteSale()
+    {
+        try
+        {
+            saleError = string.Empty;
+
+            // Invalid typed quantity: the sale is stopped with a message (the field is red too).
+            // A product is never dropped without telling the user.
+            if (selectedProduct != null && !CanAddItem())
+            {
+                var reason = currentItemQuantity <= 0
+                    ? "tiene que ser mayor a 0"
+                    : $"supera el stock ({selectedProduct.Stock})";
+                saleError = $"La venta no se guardó: la cantidad de {selectedProduct.Name} {reason}. Corregila o tocá Quitar para sacar ese producto.";
+                StateHasChanged();
+                return false;
+            }
+
+            // A pending selection that was not added is included: the total on screen already
+            // counts it, so what is saved matches what is shown.
+            if (selectedProduct != null)
+                AddSelectionToItems();
+
+            if (currentItems.Count == 0)
+            {
+                saleError = "Debes agregar al menos un item a la venta";
+                StateHasChanged();
+                return false;
+            }
+
+            // Check the available stock, adding up per product.
+            foreach (var product in currentItems.GroupBy(i => i.ProductId))
+            {
+                var isValid = await SaleService.ValidateStockAsync(product.Key, product.Sum(i => i.Quantity));
+                if (!isValid)
+                {
+                    saleError = $"Stock insuficiente para {product.First().ProductName}";
+                    StateHasChanged();
+                    return false;
+                }
+            }
+
+            var paymentType = isMercadoPago ? PaymentType.MercadoPago : PaymentType.Cash;
+            var saleDateTime = saleDate.Date + DateTime.Now.TimeOfDay;
+
+            foreach (var item in currentItems)
+            {
+                item.PaymentType = paymentType;
+                item.CreatedAt = saleDateTime;
+            }
+
+            var sale = new Sale
+            {
+                Date = saleDateTime,
+                UserId = AuthState.CurrentUserId,
+                CustomerId = selectedCustomer?.Id,
+                DiscountValue = discountValue,
+                DiscountIsPercentage = discountIsPercentage,
+                DiscountAmount = DiscountAmount,
+                DiscountReason = string.IsNullOrWhiteSpace(discountReason) ? null : discountReason.Trim(),
+                Items = currentItems.ToList()
+            };
+
+            await SaleService.CreateSaleAsync(sale);
+            await OnSaleCreated.InvokeAsync(sale);
+
+            // Reset the form.
+            currentItems.Clear();
+            selectedProduct = null;
+            searchTerm = string.Empty;
+            currentItemQuantity = 1;
+            isMercadoPago = false;
+            saleDate = DateTime.Today;
+            selectedCustomer = null;
+            discountValue = 0;
+            discountIsPercentage = false;
+            discountReason = string.Empty;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ErrorHub.Report(ex, "Error al guardar la venta");
+            saleError = $"Error al guardar la venta: {ex.Message}";
+            StateHasChanged();
+            return false;
+        }
+    }
+}

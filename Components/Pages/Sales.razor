@@ -1,0 +1,267 @@
+@page "/sales"
+@attribute [Authorize]
+@using System.Globalization
+@using panialera.Models
+@using panialera.Services
+@inject SaleService SaleService
+@inject ProductService ProductService
+@inject DistributorService DistributorService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="sales-container">
+    <div class="sales-form-section">
+        <SaleForm OnSaleCreated="@OnSaleCreated" />
+    </div>
+
+    <div class="sales-table-section">
+        <h3>Ventas Registradas</h3>
+        @if (sales.Count == 0)
+        {
+            <p class="text-muted">No hay ventas registradas.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Número Venta</th>
+                            <th>Horario</th>
+                            <th>Producto</th>
+                            <th>Cant. Items</th>
+                            <th>Total Venta</th>
+                            <th>Método de Pago</th>
+                            <th>Cliente</th>
+                            <th>Vendedor</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{
+                            var rowIndex = 0;
+                        }
+                        @foreach (var group in sales.GroupBy(s => s.Date.Date).OrderByDescending(g => g.Key))
+                        {
+                            var dayCollapsed = collapsedDays.Contains(group.Key);
+                            <tr class="day-separator" @onclick="() => ToggleDay(group.Key)">
+                                <td colspan="9">
+                                    <span class="chevron @(dayCollapsed ? "" : "expanded")">▶</span>
+                                    @FormatDay(group.Key)
+                                    <span class="day-count">(@group.Count() ventas)</span>
+                                </td>
+                            </tr>
+
+                            @if (!dayCollapsed)
+                            {
+                            @foreach (var sale in group.OrderByDescending(s => s.Date))
+                            {
+                                var subtotal = sale.Items.Sum(i => i.SalePrice * i.Quantity);
+                                var totalPrice = subtotal - sale.DiscountAmount;
+                                var paymentType = sale.Items.First().PaymentType;
+                                var productInfo = sale.Items.Count == 1
+                                    ? $"{sale.Items.First().ProductName} - {sale.Items.First().ProductDescription}"
+                                    : $"Múltiples items ({sale.Items.Count})";
+                                rowIndex++;
+                                var zebra = (!sale.Voided && rowIndex % 2 == 0) ? "zebra-row" : "";
+
+                                <tr class="@($"{(sale.Voided ? "sale-voided" : "")} {zebra}".Trim())">
+                                    <td>
+                                        <button class="btn btn-sm btn-link chevron-btn" @onclick="() => ToggleDetails(sale.Id)">
+                                            <span class="chevron @(expandedSaleId == sale.Id ? "expanded" : "")">▶</span>
+                                        </button>
+                                        <strong>#@sale.Id</strong>
+                                        @if (sale.FromPhone)
+                                        {
+                                            <span class="sale-from-phone ms-1" title="Registrada desde el celular" aria-label="Registrada desde el celular">📱</span>
+                                        }
+                                        @if (sale.Voided)
+                                        {
+                                            <span class="badge bg-secondary ms-1">ANULADA</span>
+                                        }
+                                    </td>
+                                    <td>@sale.Date.ToString("HH:mm")</td>
+                                    <td>
+                                        <span class="d-inline-flex align-items-center gap-2">
+                                            @if (sale.Items.Count == 1)
+                                            {
+                                                <ProductImage Src="@ImageOfItem(sale.Items.First())" Height="34" Title="@sale.Items.First().ProductName" />
+                                            }
+                                            @productInfo
+                                        </span>
+                                    </td>
+                                    <td>@sale.Items.Count</td>
+                                    <td>
+                                        $@totalPrice.ToString("F2")
+                                        @if (sale.DiscountAmount > 0)
+                                        {
+                                            <span class="badge bg-warning text-dark ms-1" title="Descuento aplicado">desc.</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (paymentType == PaymentType.MercadoPago)
+                                        {
+                                            <span class="badge badge-mp">Mercado Pago</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-cash">Efectivo</span>
+                                        }
+                                    </td>
+                                    <td>@(sale.Customer?.Name ?? "—")</td>
+                                    <td>@(sale.User?.Name ?? "—")</td>
+                                    <td>
+                                        @if (!sale.Voided)
+                                        {
+                                            <button class="btn btn-sm btn-danger" @onclick="() => VoidSale(sale.Id)">
+                                                Anular
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+
+                                @if (expandedSaleId == sale.Id)
+                                {
+                                    <tr class="detail-row">
+                                        <td colspan="9">
+                                            <div class="sale-details">
+                                                <h6>Items de la Venta:</h6>
+                                                <table class="table table-sm table-striped detail-table mb-0">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Nombre</th>
+                                                            <th>Descripción</th>
+                                                            <th class="text-center">Cantidad</th>
+                                                            <th class="text-end">Precio Unit.</th>
+                                                            <th class="text-end">Subtotal</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var item in sale.Items)
+                                                        {
+                                                            <tr>
+                                                                <td>
+                                                                    <span class="d-inline-flex align-items-center gap-2">
+                                                                        <ProductImage Src="@ImageOfItem(item)" Height="34" Title="@item.ProductName" />
+                                                                        @item.ProductName
+                                                                    </span>
+                                                                </td>
+                                                                <td>@item.ProductDescription</td>
+                                                                <td class="text-center">@item.Quantity</td>
+                                                                <td class="text-end">$@item.SalePrice.ToString("F2")</td>
+                                                                <td class="text-end">$@((item.SalePrice * item.Quantity).ToString("F2"))</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                    @if (sale.DiscountAmount > 0)
+                                                    {
+                                                        <tfoot>
+                                                            <tr>
+                                                                <td colspan="4" class="text-end">Subtotal</td>
+                                                                <td class="text-end">$@subtotal.ToString("F2")</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td colspan="4" class="text-end">
+                                                                    Descuento
+                                                                    @if (!string.IsNullOrWhiteSpace(sale.DiscountReason))
+                                                                    {
+                                                                        <text>(@sale.DiscountReason)</text>
+                                                                    }
+                                                                    @if (sale.DiscountIsPercentage)
+                                                                    {
+                                                                        <text>— @sale.DiscountValue.ToString("0.##")%</text>
+                                                                    }
+                                                                </td>
+                                                                <td class="text-end text-danger">-$@sale.DiscountAmount.ToString("F2")</td>
+                                                            </tr>
+                                                            <tr class="fw-bold">
+                                                                <td colspan="4" class="text-end">Total</td>
+                                                                <td class="text-end">$@totalPrice.ToString("F2")</td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    }
+                                                </table>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly CultureInfo EsCulture = CultureInfo.GetCultureInfo("es-AR");
+
+    private List<Sale> sales = new();
+    private int? expandedSaleId = null;
+    private HashSet<DateTime> collapsedDays = new();
+
+    // Current image of the sold product (manual or the distributor's). Not shown if the
+    // product no longer exists.
+    private Dictionary<int, Product> productsById = new();
+    private Func<Product, string?> imageOf = _ => null;
+
+    private string? ImageOfItem(SaleItem item) =>
+        productsById.TryGetValue(item.ProductId, out var p) ? imageOf(p) : null;
+
+    private static string FormatDay(DateTime date)
+    {
+        var text = date.ToString("dddd dd/MM/yyyy", EsCulture);
+        return char.ToUpper(text[0], EsCulture) + text.Substring(1);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        imageOf = await DistributorService.GetProductUrlResolverAsync();
+        await LoadSales();
+        AppNotices.SalesChanged += OnSalesChanged;
+    }
+
+    // A sale made on the phone was registered in the background.
+    private void OnSalesChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadSales();
+        StateHasChanged();
+    });
+
+    public void Dispose() => AppNotices.SalesChanged -= OnSalesChanged;
+
+    private async Task LoadSales()
+    {
+        sales = await SaleService.GetAllAsync();
+        productsById = (await ProductService.GetAllAsync()).ToDictionary(p => p.Id);
+    }
+
+    private async Task OnSaleCreated(Sale sale)
+    {
+        await LoadSales();
+    }
+
+    private void ToggleDetails(int saleId)
+    {
+        expandedSaleId = expandedSaleId == saleId ? null : saleId;
+    }
+
+    private void ToggleDay(DateTime day)
+    {
+        if (!collapsedDays.Add(day))
+        {
+            collapsedDays.Remove(day);
+        }
+    }
+
+    private async Task VoidSale(int id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "¿Estás seguro de que deseas anular esta venta?"))
+        {
+            await SaleService.VoidSaleAsync(id);
+            await LoadSales();
+        }
+    }
+}
