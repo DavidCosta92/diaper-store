@@ -1,0 +1,399 @@
+@page "/products"
+@attribute [Authorize]
+@using panialera.Models
+@using panialera.Services
+@inject ProductService ProductService
+@inject DistributorService DistributorService
+@inject UnsavedGuard Guard
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="products-container">
+    <div class="products-form-section" id="products-form-top">
+        <ProductForm EditingProduct="editingProduct"
+                     Prefill="prefill"
+                     OnProductAdded="@OnProductAdded"
+                     OnProductUpdated="@OnProductUpdated"
+                     OnCancelEdit="@OnCancelEdit"
+                     OnEditExisting="@OnEditExisting"
+                     Notice="@editNotice" />
+    </div>
+
+    <div class="products-table-section">
+        <div class="table-header">
+            <h3 class="mb-0">Productos Registrados</h3>
+            <div class="table-filters">
+                <input type="text" class="form-control product-filter"
+                       placeholder="Filtrar por código, nombre, categoría o descripción..."
+                       @bind="searchTerm" @bind:event="oninput" />
+                <select class="form-select stock-filter" @bind="stockFilter">
+                    <option value="@StockFilter.All">Todo el stock</option>
+                    <option value="@StockFilter.OutOfStock">Sin stock (0)</option>
+                    <option value="@StockFilter.BelowMin">Bajo mínimo</option>
+                </select>
+                <button class="btn btn-outline-secondary reset-filters" @onclick="ResetFilters">
+                    Limpiar filtros
+                </button>
+            </div>
+        </div>
+        <SharePanel Selection="share" />
+
+        @if (products.Count == 0)
+        {
+            <p class="text-muted">No hay productos registrados.</p>
+        }
+        else if (FilteredProducts.Count == 0)
+        {
+            <p class="text-muted">No hay productos que coincidan con los filtros.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover zebra-striped">
+                    <thead>
+                        <tr>
+                            <th class="share-col" title="Elegir para compartir por WhatsApp"><WhatsAppIcon /></th>
+                            <th>ID</th>
+                            <th></th>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Categoría</th>
+                            <th>Descripción</th>
+                            <th>Cantidad</th>
+                            <th>Precio Compra</th>
+                            <th>Precio Venta</th>
+                            <th>Stock Mín.</th>
+                            <th>Últ. actualización</th>
+                            <th>Acciones</th>
+                            <th class="text-center small text-muted" title="El código coincide con un producto del catálogo del distribuidor">Dist.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var product in FilteredProducts)
+                        {
+                            var stockClass = product.Stock == 0
+                                ? "stock-zero"
+                                : product.Stock < product.MinStock
+                                    ? "stock-low"
+                                    : "";
+                            var editingClass = editingProduct?.Id == product.Id ? "editing-row" : "";
+                            var chosen = share.Contains(ShareKey(product));
+                            <tr class="@($"{stockClass} {editingClass}".Trim())"
+                                @ondblclick="() => EditProduct(product)" title="Doble clic para editar">
+                                <td class="share-col" @ondblclick:stopPropagation="true">
+                                    <button class="btn btn-sm share-add @(chosen ? "chosen" : "")"
+                                            disabled="@(chosen || product.Stock <= 0)"
+                                            title="@(chosen ? "Ya está para compartir" : product.Stock <= 0 ? "Sin stock: no se puede compartir" : "Agregar para compartir por WhatsApp")"
+                                            @onclick="() => share.TryAdd(ToShare(product))">@(chosen ? "✓" : "＋")</button>
+                                </td>
+                                <td>@product.Id</td>
+                                <td class="thumb-cell">
+                                    <ProductImage Src="@imageOf(product)" Height="40" Title="@product.Name" />
+                                </td>
+                                <td>@product.Code</td>
+                                <td>@product.Name</td>
+                                <td>@product.Category</td>
+                                <td>@product.Description</td>
+                                <td>@product.Stock</td>
+                                <td>$@product.PurchasePrice.ToString("F2")</td>
+                                <td>$@product.SalePrice.ToString("F2")</td>
+                                <td>@product.MinStock</td>
+                                <td>
+                                    @if (product.LastUpdatedAt.HasValue)
+                                    {
+                                        <span class="update-info">
+                                            @product.LastUpdatedAt.Value.ToString("dd/MM/yyyy HH:mm")
+                                            <br />
+                                            <small class="text-muted">@(product.LastUpdatedByUser?.Name ?? "—")</small>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td @ondblclick:stopPropagation="true">
+                                    <div class="action-buttons">
+                                        <EditButton OnClick="() => EditProduct(product)" />
+                                        <PriceButton OnClick="() => OpenPricesModal(product)" />
+                                        <DeleteButton OnClick="() => DeleteProduct(product.Id)" />
+                                    </div>
+                                </td>
+                                <td class="text-center text-muted small">
+                                    @if (InDistributorCatalog(product))
+                                    {
+                                        <span title="Está en el catálogo del distribuidor">✓</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<Modal IsOpen="showPricesModal"
+       Title="@($"Historial - {selectedProduct?.Name}")"
+       OnClose="ClosePricesModal">
+    <h6 class="mb-2 section-toggle" @onclick="() => pricesExpanded = !pricesExpanded">
+        <span class="chevron @(pricesExpanded ? "expanded" : "")">▶</span>
+        Evolución de precios
+        <span class="section-count">(@priceHistory.Count registros)</span>
+    </h6>
+    @if (pricesExpanded)
+    {
+        @if (priceHistory.Count == 0)
+        {
+            <p class="text-muted">No hay registros de precios.</p>
+        }
+        else
+        {
+            <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th class="text-end">Precio Compra</th>
+                    <th class="text-end">Precio Venta</th>
+                    <th class="text-end">Ganancia</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ph in priceHistory)
+                {
+                    var profit = ph.SalePrice - ph.PurchasePrice;
+                    var profitPct = ph.PurchasePrice > 0 ? (profit / ph.PurchasePrice) * 100 : 0;
+                    <tr>
+                        <td>@ph.RecordedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td class="text-end">$@ph.PurchasePrice.ToString("F2")</td>
+                        <td class="text-end">$@ph.SalePrice.ToString("F2")</td>
+                        <td class="text-end @(profit >= 0 ? "text-success" : "text-danger")">
+                            $@profit.ToString("F2") (@profitPct.ToString("F1")%)
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            </table>
+        }
+    }
+
+    <h6 class="mb-2 mt-4 section-toggle" @onclick="() => changesExpanded = !changesExpanded">
+        <span class="chevron @(changesExpanded ? "expanded" : "")">▶</span>
+        Historial de cambios
+        <span class="section-count">(@changes.Count registros)</span>
+    </h6>
+    @if (changesExpanded)
+    {
+        @if (changes.Count == 0)
+        {
+            <p class="text-muted">No hay cambios registrados.</p>
+        }
+        else
+        {
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Usuario</th>
+                        <th>Operación</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in changes)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@c.Date.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@(c.UserName ?? "—")</td>
+                            <td class="text-nowrap">@c.Category.DisplayName() · @c.Action</td>
+                            <td style="white-space: pre-line">@(string.IsNullOrWhiteSpace(c.Details) ? c.Description : c.Details)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</Modal>
+
+@code {
+    private string? editNotice;
+    private List<Product> products = new();
+    private Product? editingProduct;
+    private string searchTerm = string.Empty;
+    private StockFilter stockFilter = StockFilter.All;
+
+    private enum StockFilter { All, OutOfStock, BelowMin }
+
+    // Live grid filter: by text (code, name, category, description) and by stock.
+    private List<Product> FilteredProducts
+    {
+        get
+        {
+            IEnumerable<Product> query = products;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                query = query.Where(p =>
+                    p.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                    || p.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                    || (p.Code?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (p.Category?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
+
+            query = stockFilter switch
+            {
+                StockFilter.OutOfStock => query.Where(p => p.Stock == 0),
+                StockFilter.BelowMin => query.Where(p => p.Stock > 0 && p.Stock < p.MinStock),
+                _ => query
+            };
+
+            return query.ToList();
+        }
+    }
+
+    private void ResetFilters()
+    {
+        searchTerm = string.Empty;
+        stockFilter = StockFilter.All;
+    }
+
+    private bool showPricesModal = false;
+    private Product? selectedProduct;
+    private List<ProductPriceHistory> priceHistory = new();
+    private List<AuditLog> changes = new();
+
+    // The modal lists start collapsed: only the header shows.
+    private bool pricesExpanded = false;
+    private bool changesExpanded = false;
+
+    // Manual photo, or the distributor's by code (null = no photo).
+    private Func<Product, string?> imageOf = _ => null;
+
+    // Codes in the distributor's catalog: flags which products it carries.
+    private HashSet<string> distributorCodes = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool InDistributorCatalog(Product p) =>
+        !string.IsNullOrWhiteSpace(p.Code) && distributorCodes.Contains(p.Code.Trim());
+
+    // Comes from the Distributor screen ("+ Agregar"): catalog product id.
+    [SupplyParameterFromQuery(Name = "distributor")]
+    public int? FromDistributor { get; set; }
+
+    // Data used to prefill the new-product form.
+    private Product? prefill;
+
+    protected override async Task OnInitializedAsync()
+    {
+        imageOf = await DistributorService.GetProductUrlResolverAsync();
+        distributorCodes = await DistributorService.GetCodesAsync();
+        await LoadProducts();
+        AppNotices.SalesChanged += OnSalesChanged;
+
+        if (FromDistributor is int id && await DistributorService.GetByIdAsync(id) is { } d)
+        {
+            // The web price becomes the purchase price; sale price and stock are filled in by hand.
+            prefill = new Product
+            {
+                Code = d.Code,
+                Name = d.Name,
+                Category = d.Category,
+                Description = d.Description ?? string.Empty,
+                PurchasePrice = d.WebPrice ?? 0
+            };
+        }
+    }
+
+    // Products chosen to share by WhatsApp (like the phone app). Capped to the stock.
+    private readonly ShareSelection share = new();
+
+    private static string ShareKey(Product p) => $"p:{p.Id}";
+
+    private static ShareLine ToShare(Product p) => new()
+    {
+        Key = ShareKey(p),
+        Name = p.Name,
+        Description = p.Description,
+        Price = p.SalePrice,
+        Max = p.Stock
+    };
+
+    private async Task LoadProducts()
+    {
+        products = await ProductService.GetAllAsync();
+        var byKey = products.ToDictionary(ShareKey);
+        share.Reconcile(key => byKey.TryGetValue(key, out var p) ? ToShare(p) : null);
+    }
+
+    // A sale made on the phone changed the stock.
+    private void OnSalesChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadProducts();
+        StateHasChanged();
+    });
+
+    public void Dispose() => AppNotices.SalesChanged -= OnSalesChanged;
+
+    private async Task OnProductAdded(Product product)
+    {
+        await LoadProducts();
+    }
+
+    // A code typed in a new product is already ours: that product opens for editing (no
+    // duplicates, DEC of 22/11/2026).
+    private void OnEditExisting(Product product)
+    {
+        editingProduct = products.FirstOrDefault(p => p.Id == product.Id) ?? product;
+        editNotice = $"El código {product.Code?.Trim()} ya es de «{product.Name}»: se abrió para editarlo.";
+    }
+
+    private async Task OnProductUpdated(Product product)
+    {
+        editingProduct = null;
+        editNotice = null;
+        await LoadProducts();
+    }
+
+    private async Task EditProduct(Product product)
+    {
+        // If the current form has unsaved changes, ask before switching items.
+        if (!await Guard.TryLeaveAsync())
+            return;
+
+        editingProduct = product;
+        editNotice = null;
+        // Scroll to the form so it is clear what is being edited.
+        await JS.InvokeVoidAsync("scrollToTop");
+    }
+
+    private void OnCancelEdit()
+    {
+        editingProduct = null;
+        editNotice = null;
+    }
+
+    private async Task DeleteProduct(int id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "¿Estás seguro de que deseas eliminar este producto?"))
+        {
+            await ProductService.DeleteAsync(id);
+            await LoadProducts();
+        }
+    }
+
+    private async Task OpenPricesModal(Product product)
+    {
+        selectedProduct = product;
+        priceHistory = await ProductService.GetPriceHistoryAsync(product.Id);
+        changes = await ProductService.GetChangesAsync(product.Id);
+
+        // Always open collapsed.
+        pricesExpanded = false;
+        changesExpanded = false;
+        showPricesModal = true;
+    }
+
+    private void ClosePricesModal()
+    {
+        showPricesModal = false;
+        selectedProduct = null;
+    }
+}

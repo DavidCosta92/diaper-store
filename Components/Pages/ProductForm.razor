@@ -1,0 +1,601 @@
+﻿@using panialera.Auth
+@using panialera.Models
+@using panialera.Services
+@inject ProductService ProductService
+@inject DistributorService DistributorService
+@inject AppAuthenticationStateProvider AuthState
+@inject UnsavedGuard Guard
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="product-form-container">
+    <h4>@(EditingProduct?.Id > 0 ? "Editar Producto" : "Crear Nuevo Producto")</h4>
+
+    @if (!string.IsNullOrEmpty(Notice) && IsEditing)
+    {
+        <div class="alert alert-info py-2 code-found-notice">@Notice</div>
+    }
+
+    @if (fromDistributor && !IsEditing)
+    {
+        <div class="alert alert-warning not-mine-banner" role="alert">
+            <strong>⚠ Este producto NO está en tus productos.</strong>
+            Los datos vienen del distribuidor (precio de compra = precio web). Completá cantidad y precio de venta, y presioná <strong>Agregar</strong> para sumarlo.
+        </div>
+    }
+
+    <div class="product-image-row">
+        <div class="product-thumb">
+            @if (ImageUrl != null)
+            {
+                <ProductImage Src="@ImageUrl" Height="48" Title="@(string.IsNullOrWhiteSpace(formData.Name) ? "Imagen del producto" : formData.Name)" />
+            }
+            else
+            {
+                <span>Sin foto</span>
+            }
+        </div>
+        <div class="product-image-actions">
+            <div class="d-flex gap-2">
+                <InputFile id="product-image-input" class="d-none" accept="image/*" OnChange="OnImageSelected" />
+                <label for="product-image-input" class="btn btn-sm btn-outline-secondary mb-0">
+                    @(HasManualImage ? "Cambiar foto" : "Subir foto")
+                </label>
+                @if (HasManualImage)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="RemoveImage">Quitar foto</button>
+                }
+            </div>
+            <small class="text-muted">
+                @if (HasManualImage)
+                {
+                    @("Foto subida a mano.")
+                }
+                else if (ImageUrl != null)
+                {
+                    @("Foto del distribuidor (por código).")
+                }
+                else
+                {
+                    @("Si el código coincide con el del distribuidor, se usa su foto.")
+                }
+            </small>
+            @if (!string.IsNullOrEmpty(imageError))
+            {
+                <small class="text-danger">@imageError</small>
+            }
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-3">
+            <label for="code" class="form-label">Código</label>
+            <input type="text" class="form-control" id="code" @bind="formData.Code" @bind:event="oninput"
+                   @onfocusout="CheckCodeAsync" @onkeydown="OnCodeKeyDown" />
+            @if (!IsEditing)
+            {
+                <div class="form-text">Al salir del campo se busca el código en tus productos y en el distribuidor.</div>
+            }
+        </div>
+
+        <div class="col-md-5">
+            <label for="name" class="form-label">Nombre</label>
+            <input type="text" class="form-control" id="name" @bind="formData.Name" @bind:event="oninput" />
+        </div>
+
+        <div class="col-md-4">
+            <label for="category" class="form-label">Categoría</label>
+            <input type="text" class="form-control" id="category" list="category-suggestions"
+                   placeholder="(opcional)" @bind="formData.Category" @bind:event="oninput" />
+            <datalist id="category-suggestions">
+                @foreach (var c in categories)
+                {
+                    <option value="@c"></option>
+                }
+            </datalist>
+        </div>
+
+        <div class="col-md-6">
+            <label for="description" class="form-label">Descripción</label>
+            <input type="text" class="form-control" id="description" @bind="formData.Description" @bind:event="oninput" />
+        </div>
+
+        <div class="col-md-6">
+            <label for="stock" class="form-label">Cantidad (stock)</label>
+            <input type="number" class="form-control @(MissingStock ? "is-invalid" : "")" id="stock" @bind="formData.Stock" @bind:event="oninput" />
+            @if (MissingStock)
+            {
+                <div class="invalid-feedback d-block missing-stock">El stock está en 0: revisalo antes de agregar.</div>
+            }
+            @if (stockCountOpen && IsEditing && formData.Stock != _initial.Stock)
+            {
+                <div class="form-text text-warning stock-count-warning">
+                    Hay un arqueo en curso. Si esta mercadería se cuenta en el arqueo, al finalizarlo se va a sumar dos veces.
+                </div>
+            }
+        </div>
+
+        <div class="col-md-6">
+            <label for="min-stock" class="form-label">Stock Mínimo</label>
+            <select class="form-select" id="min-stock" @onchange="@((ChangeEventArgs e) => formData.MinStock = int.Parse(e.Value?.ToString() ?? "5"))">
+                <option value="1" selected="@(formData.MinStock == 1)">1 unidad</option>
+                <option value="2" selected="@(formData.MinStock == 2)">2 unidades</option>
+                <option value="3" selected="@(formData.MinStock == 3)">3 unidades</option>
+                <option value="5" selected="@(formData.MinStock == 5)">5 unidades</option>
+                <option value="10" selected="@(formData.MinStock == 10)">10 unidades</option>
+                <option value="15" selected="@(formData.MinStock == 15)">15 unidades</option>
+                <option value="20" selected="@(formData.MinStock == 20)">20 unidades</option>
+                <option value="25" selected="@(formData.MinStock == 25)">25 unidades</option>
+                <option value="30" selected="@(formData.MinStock == 30)">30 unidades</option>
+            </select>
+        </div>
+
+        <div class="col-md-6">
+            <label for="purchase-price" class="form-label">Precio de Compra</label>
+            <input type="number" class="form-control" id="purchase-price" step="0.01" @bind="formData.PurchasePrice" @bind:event="oninput" />
+        </div>
+
+        <div class="col-md-6">
+            <label for="sale-price" class="form-label">Precio de Venta</label>
+            <input type="number" class="form-control @(MissingSalePrice ? "is-invalid" : "")" id="sale-price" step="0.01" @bind="formData.SalePrice" @bind:event="oninput" />
+            @if (MissingSalePrice)
+            {
+                <div class="invalid-feedback d-block missing-sale-price">Falta el precio de venta.</div>
+            }
+            @if (SuggestedPrice is { } suggested)
+            {
+                <div class="form-text suggested-price">sugerido: $@suggested.ToString("F2") (@margin.ToString("0.##")%)</div>
+            }
+        </div>
+    </div>
+
+    <div class="my-3 d-flex align-items-center" style="min-height: 31px;">
+        @if (formData.PurchasePrice > 0 && formData.SalePrice > 0)
+        {
+            <span class="badge @(ProfitPercent >= 0 ? "bg-success" : "bg-danger")" style="font-size: 0.9rem;">
+                Ganancia: @ProfitPercent.ToString("F1")% (@((formData.SalePrice - formData.PurchasePrice).ToString("C")))
+            </span>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger py-2 mb-3" role="alert">@error</div>
+    }
+
+    <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-success" @onclick="SaveClickedAsync" disabled="@(!IsDirty)">
+            @(EditingProduct?.Id > 0 ? "Guardar" : "Agregar")
+        </button>
+        @if (EditingProduct?.Id > 0)
+        {
+            <button class="btn btn-secondary" @onclick="CancelEdit">Cancelar</button>
+        }
+    </div>
+</div>
+
+<Modal IsOpen="notMineAlert != null" Title="⚠ Atención: producto que no es tuyo" OnClose="CloseNotMineAlert">
+    @if (notMineAlert != null)
+    {
+        <div class="not-mine-alert">
+            <p class="fs-5 fw-bold text-danger mb-2">El código @notMineAlert.Code existe en el distribuidor, pero NO está entre tus productos.</p>
+            <p class="mb-2">Se cargaron los datos del distribuidor: <strong>@notMineAlert.Name</strong>.</p>
+            <p class="mb-3">Si querés agregarlo, completá la <strong>cantidad</strong> y el <strong>precio de venta</strong> y presioná <strong>Agregar</strong>. Si no, vaciá el formulario.</p>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" @onclick="CloseNotMineAlert">Entendido</button>
+                <button class="btn btn-outline-secondary" @onclick="DiscardDistributorData">Vaciar el formulario</button>
+            </div>
+        </div>
+    }
+</Modal>
+
+@code {
+    [Parameter]
+    public Product? EditingProduct { get; set; }
+
+    // The code typed belongs to an existing product: the page opens it for editing.
+    [Parameter]
+    public EventCallback<Product> OnEditExisting { get; set; }
+
+    // Shown above the form while editing (e.g. "it was opened because of its code").
+    [Parameter]
+    public string? Notice { get; set; }
+
+    [Parameter]
+    public EventCallback<Product> OnProductAdded { get; set; }
+
+    [Parameter]
+    public EventCallback<Product> OnProductUpdated { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancelEdit { get; set; }
+
+    // Data to prefill a new product (e.g. from the distributor's catalog).
+    [Parameter]
+    public Product? Prefill { get; set; }
+
+    private class FormData
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int Stock { get; set; }
+        public decimal PurchasePrice { get; set; }
+        public decimal SalePrice { get; set; }
+        public int MinStock { get; set; } = 5;
+
+        // Manual image already saved (file) and, if the user picked a new one, its
+        // pending bytes: they are only written to disk when the product is saved.
+        public string? ImageFile { get; set; }
+        public byte[]? NewImage { get; set; }
+        public string? NewImagePreview { get; set; }
+    }
+
+    private const long MaxImageBytes = 10 * 1024 * 1024;
+
+    private FormData formData = new();
+    private FormData _initial = new();
+    private string error = string.Empty;
+    private string imageError = string.Empty;
+    private IDisposable? guardReg;
+    private List<string> categories = new();
+    private Func<Product, string?> imageResolver = _ => null;
+    private bool stockCountOpen;
+
+    // Expected margin shared with the Distributor screen (25% by default).
+    private decimal margin = MarginSetting.Default;
+
+    // Last code looked up, so leaving the field again does not repeat it.
+    private string lastCheckedCode = string.Empty;
+    private DistributorProduct? notMineAlert;
+
+    private bool NewFromDistributor => fromDistributor && !IsEditing;
+    private bool MissingSalePrice => NewFromDistributor && formData.SalePrice <= 0;
+    private bool MissingStock => NewFromDistributor && formData.Stock <= 0;
+
+    private decimal? SuggestedPrice =>
+        formData.PurchasePrice > 0 ? MarginSetting.Apply(formData.PurchasePrice, margin) : null;
+
+    private bool IsEditing => EditingProduct?.Id > 0;
+
+    private bool HasManualImage => formData.NewImage != null || formData.ImageFile != null;
+
+    // What the thumbnail shows: the newly picked photo, the saved manual one,
+    // or the distributor's for the code typed in.
+    private string? ImageUrl =>
+        formData.NewImagePreview
+        ?? imageResolver(new Product { Code = formData.Code, ImageFile = formData.ImageFile });
+
+    private decimal ProfitPercent =>
+        formData.PurchasePrice > 0
+            ? ((formData.SalePrice - formData.PurchasePrice) / formData.PurchasePrice) * 100
+            : 0;
+
+    public bool IsDirty =>
+        formData.Code != _initial.Code
+        || formData.Name != _initial.Name
+        || formData.Category != _initial.Category
+        || formData.ImageFile != _initial.ImageFile
+        || formData.NewImage != _initial.NewImage
+        || formData.Description != _initial.Description
+        || formData.Stock != _initial.Stock
+        || formData.PurchasePrice != _initial.PurchasePrice
+        || formData.SalePrice != _initial.SalePrice
+        || formData.MinStock != _initial.MinStock;
+
+    protected override async Task OnInitializedAsync()
+    {
+        guardReg = Guard.Register(() => IsDirty, TrySaveAsync, Reset);
+
+        // Category suggestions: the ones already used plus the distributor's.
+        var own = await ProductService.GetCategoriesAsync();
+        var distributor = await DistributorService.GetCategoriesAsync();
+        categories = own.Concat(distributor)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c)
+            .ToList();
+
+        imageResolver = await DistributorService.GetProductUrlResolverAsync();
+        stockCountOpen = await ProductService.HasOpenStockCountAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        margin = await MarginSetting.ReadAsync(JS);
+        StateHasChanged();
+    }
+
+    private Task OnCodeKeyDown(KeyboardEventArgs e) => e.Key == "Enter" ? CheckCodeAsync() : Task.CompletedTask;
+
+    // The code works almost as an id. In a new product: if it is already ours, the product opens
+    // for editing; if only the distributor has it, its data is loaded with a warning that cannot
+    // be missed; if nobody has it, nothing happens.
+    private async Task CheckCodeAsync()
+    {
+        var code = formData.Code.Trim();
+        if (IsEditing || code.Length == 0 || code.Equals(lastCheckedCode, StringComparison.OrdinalIgnoreCase))
+            return;
+        lastCheckedCode = code;
+
+        if (await ProductService.FindByCodeAsync(code) is { } mine)
+        {
+            await OnEditExisting.InvokeAsync(mine);
+            return;
+        }
+
+        // With several distributors one code could match more than one item; today there is one.
+        var found = await DistributorService.GetByCodeAsync(code);
+        if (found.FirstOrDefault() is not { } d)
+            return;
+
+        formData.Code = d.Code;
+        formData.Name = d.Name;
+        formData.Category = d.Category ?? string.Empty;
+        formData.Description = d.Description ?? string.Empty;
+        formData.PurchasePrice = d.WebPrice ?? 0;
+        fromDistributor = true;
+        notMineAlert = d;
+    }
+
+    private void CloseNotMineAlert() => notMineAlert = null;
+
+    private void DiscardDistributorData()
+    {
+        notMineAlert = null;
+        formData = new FormData();
+        fromDistributor = false;
+        lastCheckedCode = string.Empty;
+    }
+
+    // From the distributor, saving with stock 0 asks first: it may be on purpose (not arrived yet).
+    private async Task SaveClickedAsync()
+    {
+        if (MissingStock && !MissingSalePrice && !string.IsNullOrWhiteSpace(formData.Name)
+            && !await JS.InvokeAsync<bool>("confirm", "Ojo: el stock está en 0.\n\n¿Agregar el producto igual?"))
+            return;
+        await TrySaveAsync();
+    }
+
+    private async Task OnImageSelected(InputFileChangeEventArgs e)
+    {
+        imageError = string.Empty;
+        try
+        {
+            if (!e.File.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                imageError = "El archivo elegido no es una imagen.";
+                return;
+            }
+
+            // The WebView shrinks it to a reasonable size before handing it over (small on disk).
+            var resized = await e.File.RequestImageFileAsync("image/jpeg", 600, 600);
+            using var ms = new MemoryStream();
+            await using (var stream = resized.OpenReadStream(MaxImageBytes))
+            {
+                await stream.CopyToAsync(ms);
+            }
+
+            formData.NewImage = ms.ToArray();
+            formData.NewImagePreview = $"data:image/jpeg;base64,{Convert.ToBase64String(formData.NewImage)}";
+        }
+        catch (Exception ex)
+        {
+            imageError = "No se pudo cargar la imagen.";
+            ErrorHub.Report(ex, "Error al cargar la imagen del producto");
+        }
+    }
+
+    private void RemoveImage()
+    {
+        formData.ImageFile = null;
+        formData.NewImage = null;
+        formData.NewImagePreview = null;
+        imageError = string.Empty;
+    }
+
+    private Product? _loadedFor;
+    private Product? _prefilledFrom;
+    private bool fromDistributor;
+
+    protected override void OnParametersSet()
+    {
+        LoadProduct();
+        ApplyPrefill();
+    }
+
+    // Prefills only once: it stays as a new product with unsaved changes (the snapshot
+    // is the empty form), so "Agregar" is enabled and the leave warning works.
+    private void ApplyPrefill()
+    {
+        if (Prefill == null || ReferenceEquals(Prefill, _prefilledFrom) || IsEditing)
+            return;
+        _prefilledFrom = Prefill;
+
+        formData.Code = Prefill.Code ?? string.Empty;
+        lastCheckedCode = formData.Code.Trim();
+        formData.Name = Prefill.Name;
+        formData.Category = Prefill.Category ?? string.Empty;
+        formData.Description = Prefill.Description;
+        formData.PurchasePrice = Prefill.PurchasePrice;
+        fromDistributor = true;
+    }
+
+    private void LoadProduct()
+    {
+        // Only re-initialize when the product to edit changes (not on every re-render).
+        if (ReferenceEquals(EditingProduct, _loadedFor))
+            return;
+        _loadedFor = EditingProduct;
+        fromDistributor = false;
+        lastCheckedCode = string.Empty;
+
+        if (IsEditing)
+        {
+            formData = new FormData
+            {
+                Code = EditingProduct!.Code ?? string.Empty,
+                Name = EditingProduct.Name,
+                Category = EditingProduct.Category ?? string.Empty,
+                ImageFile = EditingProduct.ImageFile,
+                Description = EditingProduct.Description,
+                Stock = EditingProduct.Stock,
+                PurchasePrice = EditingProduct.PurchasePrice,
+                SalePrice = EditingProduct.SalePrice,
+                MinStock = EditingProduct.MinStock
+            };
+        }
+        else
+        {
+            formData = new FormData();
+        }
+        imageError = string.Empty;
+        Snapshot();
+    }
+
+    private static FormData Clone(FormData f) => new()
+    {
+        Code = f.Code,
+        Name = f.Name,
+        Category = f.Category,
+        ImageFile = f.ImageFile,
+        NewImage = f.NewImage,
+        NewImagePreview = f.NewImagePreview,
+        Description = f.Description,
+        Stock = f.Stock,
+        PurchasePrice = f.PurchasePrice,
+        SalePrice = f.SalePrice,
+        MinStock = f.MinStock
+    };
+
+    private void Snapshot() => _initial = Clone(formData);
+
+    private void Reset()
+    {
+        formData = Clone(_initial);
+        fromDistributor = false;
+        error = string.Empty;
+        imageError = string.Empty;
+        StateHasChanged();
+    }
+
+    private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    // The product as the form loaded it, saved the same way, so only the fields changed here are
+    // written (a phone edit applied meanwhile to another field is kept).
+    private static Product Loaded(FormData f) => new()
+    {
+        Code = NullIfEmpty(f.Code),
+        Name = f.Name,
+        Category = NullIfEmpty(f.Category),
+        ImageFile = f.ImageFile,
+        Description = f.Description,
+        Stock = f.Stock,
+        PurchasePrice = f.PurchasePrice,
+        SalePrice = f.SalePrice,
+        MinStock = f.MinStock
+    };
+
+    // After saving, the form shows what the database has now (it may include phone changes).
+    private void LoadSaved(Product p)
+    {
+        formData.Code = p.Code ?? string.Empty;
+        formData.Name = p.Name;
+        formData.Category = p.Category ?? string.Empty;
+        formData.Description = p.Description;
+        formData.Stock = p.Stock;
+        formData.PurchasePrice = p.PurchasePrice;
+        formData.SalePrice = p.SalePrice;
+        formData.MinStock = p.MinStock;
+    }
+
+    // If a new photo was picked, write it to disk now and return its file name.
+    private async Task<string?> ResolveImageToSave() =>
+        formData.NewImage != null
+            ? await ProductService.SaveImageAsync(formData.NewImage, ".jpg")
+            : formData.ImageFile;
+
+    public async Task<bool> TrySaveAsync()
+    {
+        error = string.Empty;
+        var category = NullIfEmpty(formData.Category);
+        if (category != null && !categories.Contains(category, StringComparer.OrdinalIgnoreCase))
+            categories = categories.Append(category).OrderBy(c => c).ToList();
+        if (string.IsNullOrWhiteSpace(formData.Name))
+        {
+            error = "El nombre es obligatorio.";
+            StateHasChanged();
+            return false;
+        }
+        // From the distributor the sale price starts at 0 so it is always chosen by hand.
+        if (fromDistributor && !IsEditing && formData.SalePrice <= 0)
+        {
+            error = "Completá el precio de venta.";
+            StateHasChanged();
+            return false;
+        }
+        // The code works almost as an id: never two products with the same one.
+        if (await ProductService.FindByCodeAsync(formData.Code, EditingProduct?.Id ?? 0) is { } other)
+        {
+            error = $"Ya existe {other.Name} con el código {formData.Code.Trim()}. El código no se puede repetir.";
+            StateHasChanged();
+            return false;
+        }
+
+        var image = await ResolveImageToSave();
+
+        if (IsEditing)
+        {
+            EditingProduct!.Code = NullIfEmpty(formData.Code);
+            EditingProduct.Name = formData.Name;
+            EditingProduct.Category = NullIfEmpty(formData.Category);
+            EditingProduct.ImageFile = image;
+            EditingProduct.Description = formData.Description;
+            EditingProduct.Stock = formData.Stock;
+            EditingProduct.PurchasePrice = formData.PurchasePrice;
+            EditingProduct.SalePrice = formData.SalePrice;
+            EditingProduct.MinStock = formData.MinStock;
+
+            await ProductService.UpdateAsync(EditingProduct, AuthState.CurrentUserId, loaded: Loaded(_initial));
+            LoadSaved(EditingProduct);
+            formData.ImageFile = image;
+            formData.NewImage = null;
+            formData.NewImagePreview = null;
+            Snapshot();
+            await OnProductUpdated.InvokeAsync(EditingProduct);
+        }
+        else
+        {
+            var newProduct = new Product
+            {
+                Code = NullIfEmpty(formData.Code),
+                Name = formData.Name,
+                Category = NullIfEmpty(formData.Category),
+                ImageFile = image,
+                Description = formData.Description,
+                Stock = formData.Stock,
+                PurchasePrice = formData.PurchasePrice,
+                SalePrice = formData.SalePrice,
+                MinStock = formData.MinStock
+            };
+
+            await ProductService.AddAsync(newProduct, AuthState.CurrentUserId);
+            formData = new FormData();
+            fromDistributor = false;
+            lastCheckedCode = string.Empty;
+            Snapshot();
+            await OnProductAdded.InvokeAsync(newProduct);
+        }
+
+        return true;
+    }
+
+    private async Task CancelEdit()
+    {
+        await OnCancelEdit.InvokeAsync();
+    }
+
+    public void Dispose() => guardReg?.Dispose();
+}
