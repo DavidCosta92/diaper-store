@@ -1,0 +1,224 @@
+@page "/customers"
+@attribute [Authorize]
+@using panialera.Models
+@using panialera.Services
+@inject CustomerService CustomerService
+@inject UnsavedGuard Guard
+@inject IJSRuntime JS
+@inject WhatsAppShare WhatsApp
+@inject PhoneSettings Phones
+
+<div class="customers-container">
+    <div class="customers-form-section" id="customers-form-top">
+        <h4 class="fw-bold">@(editing == null ? "Nuevo Cliente" : $"Editar Cliente: {editing.Name}")</h4>
+        <CustomerForm EditingCustomer="editing"
+                     ShowCancel="editing != null"
+                     OnSaved="OnCustomerSaved"
+                     OnCancel="CancelEdit" />
+    </div>
+
+    <div class="customers-table-section">
+        <div class="table-header">
+            <h3 class="mb-0">Agenda de Clientes</h3>
+            <input type="text" class="form-control customer-filter"
+                   placeholder="Buscar por nombre, teléfono o dirección..."
+                   @bind="searchTerm" @bind:event="oninput" />
+        </div>
+
+        @if (customers.Count == 0)
+        {
+            <p class="text-muted">No hay clientes cargados.</p>
+        }
+        else if (FilteredCustomers.Count == 0)
+        {
+            <p class="text-muted">No hay clientes que coincidan con la búsqueda.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover zebra-striped">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Teléfono</th>
+                            <th>Dirección</th>
+                            <th>Extras</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in FilteredCustomers)
+                        {
+                            <tr class="@(editing?.Id == c.Id ? "editing-row" : "")"
+                                @ondblclick="() => EditCustomer(c)" title="Doble clic para editar">
+                                <td>@c.Name</td>
+                                <td class="text-nowrap">
+                                    @(string.IsNullOrWhiteSpace(c.Phone) ? "—" : c.Phone)
+                                    @if (PhoneNumbers.ForWhatsApp(c.Phone, Phones.AreaCode) is { } number)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-link p-0 ms-1 whatsapp-chat"
+                                                title="Abrir el chat de WhatsApp" @ondblclick:stopPropagation="true"
+                                                @onclick="() => OpenChat(number)"><WhatsAppIcon /></button>
+                                    }
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(c.Address) ? "—" : c.Address)</td>
+                                <td>@(string.IsNullOrWhiteSpace(c.Extras) ? "—" : c.Extras)</td>
+                                <td @ondblclick:stopPropagation="true">
+                                    <div class="action-buttons">
+                                        <EditButton OnClick="() => EditCustomer(c)" />
+                                        <button type="button" class="btn btn-sm btn-outline-primary action-btn"
+                                                title="Ver ventas del cliente" @onclick="() => OpenSalesModal(c)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                <path d="M8 1a2.5 2.5 0 0 1 2.5 2.5V4h-5v-.5A2.5 2.5 0 0 1 8 1m3.5 3v-.5a3.5 3.5 0 1 0-7 0V4H1v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4zM2 5h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" />
+                                            </svg>
+                                        </button>
+                                        <DeleteButton OnClick="() => DeleteCustomer(c)" />
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<Modal IsOpen="showSalesModal"
+       Title="@($"Ventas de {selectedCustomer?.Name}")"
+       OnClose="CloseSalesModal">
+    @if (customerSales.Count == 0)
+    {
+        <p class="text-muted">Este cliente todavía no tiene ventas registradas.</p>
+    }
+    else
+    {
+        @foreach (var sale in customerSales)
+        {
+            var total = sale.Total;
+            <div class="customer-sale @(sale.Voided ? "customer-sale-voided" : "")">
+                <div class="customer-sale-header">
+                    <span><strong>#@sale.Id</strong> — @sale.Date.ToString("dd/MM/yyyy HH:mm")</span>
+                    <span class="customer-sale-total">$@total.ToString("F2")</span>
+                </div>
+                <div class="customer-sale-sub">
+                    @(sale.Items.FirstOrDefault()?.PaymentType == PaymentType.MercadoPago ? "Mercado Pago" : "Efectivo")
+                    · Vendedor: @(sale.User?.Name ?? "—")
+                    @if (sale.Voided)
+                    {
+                        <span class="badge bg-secondary ms-1">ANULADA</span>
+                    }
+                </div>
+                <table class="table table-sm table-striped mb-0 mt-2">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Descripción</th>
+                            <th class="text-center">Cant.</th>
+                            <th class="text-end">Precio</th>
+                            <th class="text-end">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in sale.Items)
+                        {
+                            <tr>
+                                <td>@item.ProductName</td>
+                                <td>@item.ProductDescription</td>
+                                <td class="text-center">@item.Quantity</td>
+                                <td class="text-end">$@item.SalePrice.ToString("F2")</td>
+                                <td class="text-end">$@((item.SalePrice * item.Quantity).ToString("F2"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</Modal>
+
+@code {
+    // Opens the customer's WhatsApp chat (the app if installed, else WhatsApp Web).
+    private void OpenChat(string number)
+    {
+        if (WhatsApp.TryOpenChat(number) == WhatsAppTarget.None)
+            AppNotices.Raise("No se pudo abrir WhatsApp", "Probá de nuevo o escribile desde el celular.", isWarning: true);
+    }
+
+    private List<Customer> customers = new();
+    private Customer? editing;
+    private string searchTerm = string.Empty;
+
+    private bool showSalesModal = false;
+    private Customer? selectedCustomer;
+    private List<Sale> customerSales = new();
+
+    private List<Customer> FilteredCustomers =>
+        string.IsNullOrWhiteSpace(searchTerm)
+            ? customers
+            : customers.Where(c =>
+                c.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                || (c.Phone?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (c.Address?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+              .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomers();
+    }
+
+    private async Task LoadCustomers()
+    {
+        customers = await CustomerService.GetAllAsync();
+    }
+
+    private async Task OnCustomerSaved(Customer customer)
+    {
+        editing = null;
+        await LoadCustomers();
+    }
+
+    private async Task EditCustomer(Customer c)
+    {
+        if (!await Guard.TryLeaveAsync())
+            return;
+
+        editing = c;
+        await JS.InvokeVoidAsync("scrollToTop");
+    }
+
+    private void CancelEdit()
+    {
+        editing = null;
+    }
+
+    private async Task DeleteCustomer(Customer c)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar al cliente '{c.Name}'?"))
+            return;
+
+        var (ok, err) = await CustomerService.DeleteAsync(c.Id);
+        if (!ok)
+        {
+            await JS.InvokeVoidAsync("alert", err ?? "No se pudo eliminar.");
+            return;
+        }
+
+        if (editing?.Id == c.Id)
+            editing = null;
+        await LoadCustomers();
+    }
+
+    private async Task OpenSalesModal(Customer c)
+    {
+        selectedCustomer = c;
+        customerSales = await CustomerService.GetSalesAsync(c.Id);
+        showSalesModal = true;
+    }
+
+    private void CloseSalesModal()
+    {
+        showSalesModal = false;
+        selectedCustomer = null;
+    }
+}

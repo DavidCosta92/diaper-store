@@ -1,0 +1,40 @@
+.expenses-container {
+    padding: 20px;
+}
+
+.expenses-form-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    background-color: #f9f9f9;
+}
+
+.expenses-form-section h4 {
+    margin-bottom: 20px;
+}
+
+.expenses-table-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+.table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.expense-filter {
+    width: 340px;
+    max-width: 100%;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}

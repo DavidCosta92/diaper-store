@@ -1,0 +1,71 @@
+.todos-container {
+    padding: 20px;
+}
+
+.todos-form-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    background-color: #f9f9f9;
+}
+
+.todos-form-section h4 {
+    margin-bottom: 20px;
+}
+
+.todos-table-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+.table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.table-filters {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.todo-filter {
+    width: 280px;
+    max-width: 100%;
+}
+
+.sort-select {
+    width: 190px;
+}
+
+.hide-check {
+    white-space: nowrap;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+.todo-desc {
+    max-width: 340px;
+    white-space: pre-wrap;
+}
+
+/* Completed to-do: faded and struck through ("disabled" look). */
+.todo-completed > td {
+    opacity: 0.55;
+    text-decoration: line-through;
+}
+
+.todo-completed .badge,
+.todo-completed .action-btn {
+    text-decoration: none;
+}

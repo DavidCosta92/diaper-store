@@ -1,0 +1,145 @@
+@page "/expenses"
+@attribute [Authorize]
+@using System.Globalization
+@using panialera.Models
+@using panialera.Services
+@inject ExpenseService ExpenseService
+@inject UnsavedGuard Guard
+@inject IJSRuntime JS
+
+<div class="expenses-container">
+    <div class="expenses-form-section" id="expenses-form-top">
+        <h4 class="fw-bold">@(editing == null ? "Nuevo Egreso" : $"Editar Egreso #{editing.Id}")</h4>
+        <ExpenseForm EditingExpense="editing"
+                    ShowCancel="editing != null"
+                    OnSaved="OnExpenseSaved"
+                    OnCancel="CancelEdit" />
+    </div>
+
+    <div class="expenses-table-section">
+        <div class="table-header">
+            <h3 class="mb-0">Egresos Registrados</h3>
+            <input type="text" class="form-control expense-filter"
+                   placeholder="Buscar por nombre o descripción..."
+                   @bind="searchTerm" @bind:event="oninput" />
+        </div>
+
+        @if (expenses.Count == 0)
+        {
+            <p class="text-muted">No hay egresos registrados.</p>
+        }
+        else if (Filtered.Count == 0)
+        {
+            <p class="text-muted">No hay egresos que coincidan con la búsqueda.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover zebra-striped">
+                    <thead>
+                        <tr>
+                            <th>N°</th>
+                            <th>Fecha</th>
+                            <th>Nombre</th>
+                            <th>Descripción</th>
+                            <th>Tipo de pago</th>
+                            <th class="text-end">Valor</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in Filtered)
+                        {
+                            <tr class="@(editing?.Id == e.Id ? "editing-row" : "")"
+                                @ondblclick="() => EditExpense(e)" title="Doble clic para editar">
+                                <td>@e.Id</td>
+                                <td>@e.Date.ToString("dd/MM/yyyy")</td>
+                                <td>@e.Name</td>
+                                <td>@(string.IsNullOrWhiteSpace(e.Description) ? "—" : e.Description)</td>
+                                <td>
+                                    @if (e.PaymentType == PaymentType.MercadoPago)
+                                    {
+                                        <span class="badge badge-mp">Mercado Pago</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-cash">Efectivo</span>
+                                    }
+                                </td>
+                                <td class="text-end">$@e.Amount.ToString("F2")</td>
+                                <td @ondblclick:stopPropagation="true">
+                                    <div class="action-buttons">
+                                        <EditButton OnClick="() => EditExpense(e)" />
+                                        <DeleteButton OnClick="() => DeleteExpense(e)" />
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-group-divider">
+                            <td colspan="5" class="fw-bold text-end">TOTAL</td>
+                            <td class="text-end fw-bold">$@Filtered.Sum(e => e.Amount).ToString("F2")</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<Expense> expenses = new();
+    private Expense? editing;
+    private string searchTerm = string.Empty;
+
+    private List<Expense> Filtered =>
+        string.IsNullOrWhiteSpace(searchTerm)
+            ? expenses
+            : expenses.Where(e =>
+                e.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                || (e.Description?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+              .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadExpenses();
+    }
+
+    private async Task LoadExpenses()
+    {
+        expenses = await ExpenseService.GetAllAsync();
+    }
+
+    private async Task OnExpenseSaved()
+    {
+        editing = null;
+        await LoadExpenses();
+    }
+
+    private async Task EditExpense(Expense e)
+    {
+        if (!await Guard.TryLeaveAsync())
+            return;
+
+        editing = e;
+        await JS.InvokeVoidAsync("scrollToTop");
+    }
+
+    private void CancelEdit()
+    {
+        editing = null;
+    }
+
+    private async Task DeleteExpense(Expense e)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar el egreso '{e.Name}'?"))
+            return;
+
+        await ExpenseService.DeleteAsync(e.Id);
+        if (editing?.Id == e.Id)
+            editing = null;
+        await LoadExpenses();
+    }
+}

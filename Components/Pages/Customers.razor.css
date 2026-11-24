@@ -1,0 +1,74 @@
+.customers-container {
+    padding: 20px;
+}
+
+.customers-form-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    background-color: #f9f9f9;
+}
+
+.customers-form-section h4 {
+    margin-bottom: 20px;
+}
+
+.customers-table-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+.table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.customer-filter {
+    width: 340px;
+    max-width: 100%;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+/* Sale blocks inside the customer history modal */
+.customer-sale {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 14px;
+}
+
+.customer-sale-voided {
+    opacity: 0.7;
+}
+
+.customer-sale-voided .customer-sale-header {
+    text-decoration: line-through;
+}
+
+.customer-sale-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1rem;
+}
+
+.customer-sale-total {
+    color: var(--carinitos-pink-dark);
+    font-weight: 700;
+}
+
+.customer-sale-sub {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-top: 2px;
+}
