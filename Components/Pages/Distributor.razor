@@ -1,0 +1,437 @@
+@page "/distributor"
+@attribute [Authorize]
+@implements IDisposable
+@inject DistributorService DistributorService
+@inject ProductService ProductService
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<div class="dist-header">
+    <div>
+        <h3 class="mb-1">Distribuidor</h3>
+        <div class="text-muted">
+            @if (lastSync != null)
+            {
+                <span>
+                    Última sincronización: <strong>@lastSync.GeneratedAt.ToString("dd/MM/yyyy HH:mm")</strong>
+                    · @lastSync.Count productos
+                    @if (!string.IsNullOrEmpty(lastSync.UserName))
+                    {
+                        <span> · por @lastSync.UserName</span>
+                    }
+                </span>
+            }
+            else
+            {
+                <span>Todavía no se sincronizó el catálogo.</span>
+            }
+        </div>
+    </div>
+
+    <AuthorizeView Roles="Admin">
+        <div class="d-flex gap-2 align-items-start">
+            <button class="btn btn-primary" @onclick="Sync"
+                    disabled="@(DistributorService.IsRunning || !DistributorService.ScraperAvailable)">
+                @(DistributorService.IsRunning ? "Sincronizando..." : "Sincronizar ahora")
+            </button>
+            @if (DistributorService.HasCatalogFile)
+            {
+                <button class="btn btn-outline-secondary" @onclick="Reimport" disabled="@DistributorService.IsRunning"
+                        title="Vuelve a cargar el último catálogo descargado, sin conectarse al distribuidor">
+                    Reimportar último archivo
+                </button>
+            }
+        </div>
+    </AuthorizeView>
+</div>
+
+<AuthorizeView Roles="Admin">
+    @if (!DistributorService.ScraperAvailable)
+    {
+        <div class="alert alert-warning py-2">
+            No se encontró el sincronizador en <code>@DistributorService.ScraperPath</code>.
+            Revisá <code>ScraperPath</code> en appsettings.json o reinstalá la aplicación.
+        </div>
+    }
+</AuthorizeView>
+
+@if (DistributorService.IsRunning)
+{
+    <div class="sync-progress card mb-3">
+        <div class="card-body">
+            <div class="d-flex align-items-center mb-2">
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                <strong>@DistributorService.Stage</strong>
+                <span class="ms-auto fw-semibold">@DistributorService.Progress%</span>
+            </div>
+            <div class="progress" role="progressbar" aria-valuenow="@DistributorService.Progress" aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: @(DistributorService.Progress)%"></div>
+            </div>
+            <small class="text-muted d-block mt-2">Puede tardar unos minutos. Podés seguir usando la app mientras tanto.</small>
+        </div>
+    </div>
+}
+else if (DistributorService.LastOk != null)
+{
+    <div class="alert @(DistributorService.LastOk == true ? "alert-success" : "alert-danger") alert-dismissible py-2">
+        @DistributorService.LastMessage
+        <AuthorizeView Roles="Admin">
+            @if (DistributorService.LastOk == false)
+            {
+                <button type="button" class="btn btn-link btn-sm p-0 ms-2 align-baseline" @onclick="() => showDetails = !showDetails">
+                    @(showDetails ? "Ocultar detalle" : "Ver detalle técnico")
+                </button>
+                @if (showDetails)
+                {
+                    <pre class="sync-detail">@string.Join("\n", DistributorService.GetLog().TakeLast(30))</pre>
+                }
+            }
+        </AuthorizeView>
+        <button type="button" class="btn-close" aria-label="Cerrar" @onclick="DismissResult"></button>
+    </div>
+}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Buscar</label>
+                <input type="text" class="form-control" placeholder="Código, nombre o descripción..."
+                       @bind="searchText" @bind:event="oninput" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Categoría</label>
+                <select class="form-select" @bind="category">
+                    <option value="">Todas</option>
+                    @foreach (var c in categories)
+                    {
+                        <option value="@c">@c</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="only-in-stock" @bind="onlyInStock" />
+                    <label class="form-check-label" for="only-in-stock">Solo con stock</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="margin">Ganancia esperada</label>
+                <div class="input-group">
+                    <input type="number" class="form-control" id="margin" min="0" step="1" placeholder="ej: 30"
+                           @bind="marginPct" @bind:event="oninput" @bind:after="SaveMargin" />
+                    <span class="input-group-text">%</span>
+                </div>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-outline-secondary w-100" @onclick="ClearFilters">Limpiar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<SharePanel Selection="share" />
+
+@if (loading)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (items.Count == 0)
+{
+    <p class="text-muted">El catálogo está vacío. @(lastSync == null ? "Sincronizalo para ver los productos del distribuidor." : "")</p>
+}
+else
+{
+    var filtered = Filtered;
+    <p class="text-muted small mb-2">@filtered.Count de @items.Count productos</p>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover zebra-striped catalog-table">
+            <thead>
+                <tr>
+                    <th class="share-col" title="Elegir para compartir por WhatsApp"><WhatsAppIcon /></th>
+                    <th></th>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Categoría</th>
+                    <th>Descripción</th>
+                    <th class="text-end">Precio web</th>
+                    <th class="text-end" title="Precio web + ganancia esperada">
+                        Precio venta sugerido
+                        @if (marginPct > 0)
+                        {
+                            <small class="text-muted d-block">(+@marginPct.Value.ToString("0.##")%)</small>
+                        }
+                    </th>
+                    <th class="text-center">Stock</th>
+                    <th class="text-center" title="Hay un producto propio con el mismo código">Mis productos</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in filtered)
+                {
+                    var suggested = SuggestedPrice(d);
+                    var chosen = share.Contains(ShareKey(d));
+                    var noShare = WhyNotShare(d);
+                    <tr>
+                        <td class="share-col">
+                            <button class="btn btn-sm share-add @(chosen ? "chosen" : "")"
+                                    disabled="@(chosen || noShare != null)"
+                                    title="@(chosen ? "Ya está para compartir" : noShare ?? $"Agregar para compartir por WhatsApp a {ShareSelection.Money(SharePrice(d)!.Value)}")"
+                                    @onclick="() => AddToShare(d)">@(chosen ? "✓" : "＋")</button>
+                        </td>
+                        <td class="thumb-cell">
+                            <ProductImage Src="@imageOf(d)" Height="50" Title="@($"{d.Code} - {d.Name}")" />
+                        </td>
+                        <td class="text-nowrap">@d.Code</td>
+                        <td>@d.Name</td>
+                        <td>@d.Category</td>
+                        <td class="small">
+                            @d.Description
+                            @if (!string.IsNullOrEmpty(d.Alert))
+                            {
+                                <div class="text-danger">@d.Alert</div>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">@(d.WebPrice.HasValue ? $"${d.WebPrice.Value:F2}" : "—")</td>
+                        <td class="text-end text-nowrap fw-semibold">@(suggested.HasValue ? $"${suggested.Value:F2}" : "—")</td>
+                        <td class="text-center">
+                            <span class="badge @(d.InStock ? "bg-success" : "bg-secondary")">@(d.InStock ? "Sí" : "No")</span>
+                        </td>
+                        <td class="text-center text-nowrap">
+                            @if (ownCodes.Contains(d.Code.Trim()))
+                            {
+                                <span class="text-success fw-bold me-1" title="Ya está en mis productos">✓</span>
+                                <button class="btn btn-sm btn-outline-danger" title="Eliminar de mis productos (las ventas y reportes no se modifican)"
+                                        @onclick="() => RemoveFromMyProducts(d)">
+                                    Quitar
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-primary" title="Crear el producto con estos datos"
+                                        @onclick="() => AddToMyProducts(d)">
+                                    + Agregar
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    // The expected margin is remembered between sessions (stored in the WebView).
+    // The key keeps its original name so installed copies do not lose the saved value.
+    private const string MarginKey = MarginSetting.StorageKey;
+
+    private List<DistributorProduct> items = new();
+    private List<string> categories = new();
+    private HashSet<string> ownCodes = new(StringComparer.OrdinalIgnoreCase);
+    private DistributorSync? lastSync;
+    private Func<DistributorProduct, string?> imageOf = _ => null;
+    private bool loading = true;
+    private bool wasRunning;
+    private bool showDetails;
+
+    private string searchText = string.Empty;
+    private string category = string.Empty;
+    private bool onlyInStock;
+    private decimal? marginPct;
+
+    private List<DistributorProduct> Filtered
+    {
+        get
+        {
+            IEnumerable<DistributorProduct> q = items;
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                var t = searchText.Trim();
+                q = q.Where(d =>
+                    d.Code.Contains(t, StringComparison.OrdinalIgnoreCase)
+                    || d.Name.Contains(t, StringComparison.OrdinalIgnoreCase)
+                    || (d.Description?.Contains(t, StringComparison.OrdinalIgnoreCase) ?? false));
+            }
+            if (!string.IsNullOrEmpty(category))
+                q = q.Where(d => d.Category == category);
+            if (onlyInStock)
+                q = q.Where(d => d.InStock);
+            return q.ToList();
+        }
+    }
+
+    // Distributor products chosen to share by WhatsApp. No stock cap: the catalog does not say how
+    // many there are.
+    private readonly ShareSelection share = new();
+
+    // Sale price of our own products, by code, to share our price instead of the suggested one.
+    private Dictionary<string, decimal> ownPrices = new(StringComparer.OrdinalIgnoreCase);
+
+    private static string ShareKey(DistributorProduct d) => $"d:{d.Id}";
+
+    // Never the web price (it is our cost): our sale price if we already sell it, else the
+    // suggested one.
+    private decimal? SharePrice(DistributorProduct d) =>
+        ownPrices.TryGetValue(d.Code.Trim(), out var own) ? own : SuggestedPrice(d);
+
+    private string? WhyNotShare(DistributorProduct d) =>
+        !d.InStock ? "Sin stock en el distribuidor: no se puede compartir"
+        : SharePrice(d) == null ? "Cargá la ganancia esperada para compartirlo con el precio sugerido"
+        : null;
+
+    private ShareLine? ToShare(DistributorProduct d) =>
+        WhyNotShare(d) != null ? null : new ShareLine
+        {
+            Key = ShareKey(d),
+            Name = d.Name,
+            Description = d.Description ?? string.Empty,
+            Price = SharePrice(d)!.Value
+        };
+
+    private void AddToShare(DistributorProduct d)
+    {
+        if (ToShare(d) is { } line)
+            share.TryAdd(line);
+    }
+
+    // Prices follow the expected margin and our own prices.
+    private void ReconcileShare()
+    {
+        var byKey = items.ToDictionary(ShareKey);
+        share.Reconcile(key => byKey.TryGetValue(key, out var d) ? ToShare(d) : null);
+    }
+
+    // Web price plus the expected margin (e.g. 30% => web price * 1.30).
+    private decimal? SuggestedPrice(DistributorProduct d) =>
+        d.WebPrice.HasValue && marginPct.HasValue
+            ? Math.Round(d.WebPrice.Value * (1 + marginPct.Value / 100m), 2)
+            : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        DistributorService.Changed += OnServiceChanged;
+        wasRunning = DistributorService.IsRunning;
+        await Load();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        // The same margin as the product form: what this PC remembers, or 25%.
+        marginPct = await MarginSetting.ReadAsync(JS);
+        ReconcileShare();
+        StateHasChanged();
+    }
+
+    private async Task SaveMargin()
+    {
+        if (marginPct < 0)
+            marginPct = 0;
+        ReconcileShare();
+        try
+        {
+            if (marginPct.HasValue)
+                await JS.InvokeVoidAsync("localStorage.setItem", MarginKey,
+                    marginPct.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            else
+                await JS.InvokeVoidAsync("localStorage.removeItem", MarginKey);
+        }
+        catch
+        {
+            // Not serious: it is just not remembered next time.
+        }
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        items = await DistributorService.GetAllAsync();
+        categories = items.Where(d => !string.IsNullOrEmpty(d.Category)).Select(d => d.Category!)
+            .Distinct().OrderBy(c => c).ToList();
+        lastSync = await DistributorService.GetLastSyncAsync();
+        imageOf = await DistributorService.GetCatalogUrlResolverAsync();
+        var own = (await ProductService.GetAllAsync()).Where(p => !string.IsNullOrWhiteSpace(p.Code)).ToList();
+        ownCodes = own.Select(p => p.Code!.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        ownPrices = own.GroupBy(p => p.Code!.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().SalePrice, StringComparer.OrdinalIgnoreCase);
+        ReconcileShare();
+        loading = false;
+    }
+
+    // Raised from the scraper thread: hop to the UI thread.
+    private void OnServiceChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            var running = DistributorService.IsRunning;
+            if (wasRunning && !running)
+                await Load(); // the sync finished: reload the catalog
+            wasRunning = running;
+            StateHasChanged();
+        });
+    }
+
+    private Task Sync()
+    {
+        showDetails = false;
+        return DistributorService.SyncAsync();
+    }
+
+    private Task Reimport()
+    {
+        showDetails = false;
+        return DistributorService.ReimportAsync();
+    }
+
+    private void DismissResult()
+    {
+        showDetails = false;
+        DistributorService.DismissResult();
+    }
+
+    // Opens the new-product form prefilled with the catalog data
+    // (prices and stock are filled in by hand).
+    private void AddToMyProducts(DistributorProduct d) =>
+        Nav.NavigateTo($"products?distributor={d.Id}");
+
+    // Deletes the shop's products with this code. Sales keep their own copy of the name
+    // and prices, so reports and history do not change.
+    private async Task RemoveFromMyProducts(DistributorProduct d)
+    {
+        var own = await ProductService.GetByCodeAsync(d.Code);
+        if (own.Count == 0)
+        {
+            ownCodes.Remove(d.Code.Trim());
+            return;
+        }
+
+        var names = string.Join("\n", own.Select(p => $"- {p.Name} (stock: {p.Stock})"));
+        var message = $"¿Quitar de tus productos?\n\n{names}\n\nLas ventas ya hechas y los reportes no se modifican.";
+        if (!await JS.InvokeAsync<bool>("confirm", message))
+            return;
+
+        try
+        {
+            foreach (var p in own)
+                await ProductService.DeleteAsync(p.Id);
+            ownCodes.Remove(d.Code.Trim());
+        }
+        catch (Exception ex)
+        {
+            ErrorHub.Report(ex, "No se pudo quitar el producto");
+        }
+    }
+
+    // The expected margin is not cleared: it is a preference, not a filter.
+    private void ClearFilters()
+    {
+        searchText = string.Empty;
+        category = string.Empty;
+        onlyInStock = false;
+    }
+
+    public void Dispose() => DistributorService.Changed -= OnServiceChanged;
+}

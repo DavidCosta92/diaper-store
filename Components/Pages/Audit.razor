@@ -1,0 +1,194 @@
+@page "/audit"
+@attribute [Authorize(Roles = "Admin")]
+@using System.Text
+@inject AuditService AuditService
+
+<h3>Auditoría</h3>
+<p class="text-muted">Bitácora de todas las operaciones realizadas en el sistema, de la más reciente a la más antigua.</p>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label">Desde</label>
+                <input type="date" class="form-control" @bind="fromDate" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Hasta</label>
+                <input type="date" class="form-control" @bind="toDate" />
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">Buscar</label>
+                <input type="text" class="form-control" placeholder="Texto en descripción, acción, detalle o usuario..."
+                       @bind="searchText" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button class="btn btn-primary" @onclick="Load">Filtrar</button>
+                <button class="btn btn-outline-secondary" @onclick="ClearFilters">Limpiar</button>
+                <button class="btn btn-outline-success" @onclick="ExportCsv" disabled="@(logs.Count == 0)">Exportar CSV</button>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <span class="form-label me-2">Categorías:</span>
+            @foreach (var cat in AllCategories)
+            {
+                <label class="cat-check me-3">
+                    <input type="checkbox" class="form-check-input me-1"
+                           checked="@selected.Contains(cat)"
+                           @onchange="e => ToggleCategory(cat, (bool)e.Value!)" />
+                    <span class="audit-badge audit-@cat.ToString().ToLowerInvariant()">@cat.DisplayName()</span>
+                </label>
+            }
+            <button class="btn btn-link btn-sm p-0 me-2" @onclick="SelectAll">Todas</button>
+            <button class="btn btn-link btn-sm p-0" @onclick="SelectNone">Ninguna</button>
+        </div>
+    </div>
+</div>
+
+@if (exportMessage != null)
+{
+    <div class="alert alert-success py-2">@exportMessage</div>
+}
+
+@if (loading)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (logs.Count == 0)
+{
+    <p class="text-muted">No hay operaciones para los filtros seleccionados.</p>
+}
+else
+{
+    <p class="text-muted small mb-2">
+        @logs.Count registros
+        @if (logs.Count >= MaxRows)
+        {
+            <span> (se muestran los últimos @MaxRows; acotá las fechas o la búsqueda para ver más atrás)</span>
+        }
+    </p>
+
+    <table class="table table-sm table-hover audit-table">
+        <thead>
+            <tr>
+                <th style="width: 140px">Fecha</th>
+                <th style="width: 110px">Categoría</th>
+                <th style="width: 160px">Acción</th>
+                <th>Descripción</th>
+                <th style="width: 120px">Usuario</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var log in logs)
+            {
+                var hasDetail = !string.IsNullOrWhiteSpace(log.Details);
+                var isOpen = expanded.Contains(log.Id);
+                <tr class="@(hasDetail ? "clickable" : "") @(log.Category == AuditCategory.Errors ? "row-error" : "")"
+                    @onclick="() => ToggleDetail(log)">
+                    <td class="text-nowrap">@log.Date.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                    <td><span class="audit-badge audit-@log.Category.ToString().ToLowerInvariant()">@log.Category.DisplayName()</span></td>
+                    <td>@log.Action</td>
+                    <td>
+                        @if (hasDetail)
+                        {
+                            <span class="chevron @(isOpen ? "expanded" : "")">▶</span>
+                        }
+                        @log.Description
+                    </td>
+                    <td>@(log.UserName ?? "—")</td>
+                </tr>
+                @if (hasDetail && isOpen)
+                {
+                    <tr class="detail-row">
+                        <td colspan="5"><pre class="audit-detail">@log.Details</pre></td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private const int MaxRows = 2000;
+    private static readonly AuditCategory[] AllCategories = Enum.GetValues<AuditCategory>();
+
+    private List<AuditLog> logs = new();
+    private HashSet<AuditCategory> selected = new(AllCategories);
+    private HashSet<int> expanded = new();
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private string searchText = string.Empty;
+    private bool loading = true;
+    private string? exportMessage;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        loading = true;
+        exportMessage = null;
+        expanded.Clear();
+        logs = selected.Count == 0
+            ? new List<AuditLog>()
+            : await AuditService.SearchAsync(fromDate, toDate, selected, searchText, MaxRows);
+        loading = false;
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await Load();
+    }
+
+    // Ticking/unticking a category filters right away.
+    private async Task ToggleCategory(AuditCategory cat, bool on)
+    {
+        if (on) selected.Add(cat); else selected.Remove(cat);
+        await Load();
+    }
+
+    private async Task SelectAll()
+    {
+        selected = new(AllCategories);
+        await Load();
+    }
+
+    private async Task SelectNone()
+    {
+        selected.Clear();
+        await Load();
+    }
+
+    private async Task ClearFilters()
+    {
+        fromDate = null;
+        toDate = null;
+        searchText = string.Empty;
+        selected = new(AllCategories);
+        await Load();
+    }
+
+    private void ToggleDetail(AuditLog log)
+    {
+        if (string.IsNullOrWhiteSpace(log.Details))
+            return;
+        if (!expanded.Remove(log.Id))
+            expanded.Add(log.Id);
+    }
+
+    private void ExportCsv()
+    {
+        var sb = new StringBuilder();
+        string F(string? s) => CsvExporter.Field(s);
+
+        sb.AppendLine("Fecha,Categoria,Accion,Descripcion,Detalle,Usuario");
+        foreach (var l in logs)
+        {
+            sb.AppendLine($"{F(l.Date.ToString("dd/MM/yyyy HH:mm:ss"))},{F(l.Category.DisplayName())},{F(l.Action)},{F(l.Description)},{F(l.Details)},{F(l.UserName)}");
+        }
+
+        var path = CsvExporter.Export("auditoria", sb.ToString());
+        exportMessage = $"Exportado a: {path}";
+    }
+}

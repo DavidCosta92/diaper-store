@@ -1,0 +1,475 @@
+@page "/stock-counts"
+@attribute [Authorize]
+@using panialera.Models
+@using panialera.Services
+@inject StockCountService StockCountService
+@inject ProductService ProductService
+@inject DistributorService DistributorService
+@inject EventImportService EventImport
+@inject IJSRuntime JS
+
+<h3 class="mb-3">Arqueo de stock</h3>
+
+@if (loading)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (inProgress == null)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <p class="mb-2">
+                El arqueo toma una foto del stock actual de <strong>todos los productos</strong> para contarlos.
+                Podés imprimir la lista en PDF, marcar cada producto como verificado y, si no coincide,
+                cargar cuántos sobran (+) o faltan (−) con una nota.
+            </p>
+            <p class="text-muted small mb-3">
+                Se guarda a medida que lo completás (podés cerrar la app y seguir después). Al finalizarlo,
+                las diferencias se aplican al stock y quedan registradas en la bitácora.
+            </p>
+            <button class="btn btn-success" @onclick="Start" disabled="@working">Iniciar arqueo</button>
+        </div>
+    </div>
+}
+else
+{
+    var s = StockCountSummary.Of(inProgress);
+    var filtered = Filtered;
+
+    <div class="card mb-3 count-header">
+        <div class="card-body">
+            <div class="d-flex flex-wrap align-items-start gap-3">
+                <div>
+                    <h5 class="mb-1">Arqueo #@inProgress.Id en curso</h5>
+                    <div class="text-muted small">
+                        Iniciado el @inProgress.StartedAt.ToString("dd/MM/yyyy HH:mm")
+                        @if (!string.IsNullOrEmpty(inProgress.StartedBy))
+                        {
+                            <span> por @inProgress.StartedBy</span>
+                        }
+                    </div>
+                </div>
+                <div class="ms-auto d-flex gap-2">
+                    <button class="btn btn-outline-secondary" @onclick="() => PrintPdf(inProgress)">Imprimir PDF</button>
+                    <button class="btn btn-primary" @onclick="Finish" disabled="@working">Finalizar arqueo</button>
+                    <button class="btn btn-outline-danger" @onclick="Discard" disabled="@working">Descartar</button>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 mt-3">
+                <div class="progress flex-grow-1" role="progressbar" aria-valuenow="@s.Verified" aria-valuemin="0" aria-valuemax="@s.Items">
+                    <div class="progress-bar" style="width: @(s.Items == 0 ? 0 : s.Verified * 100 / s.Items)%"></div>
+                </div>
+                <span class="small fw-semibold text-nowrap">@s.Verified de @s.Items verificados</span>
+            </div>
+
+            <div class="d-flex flex-wrap gap-4 mt-2 small">
+                <span class="text-danger">Faltan: <strong>@s.MissingUnits u</strong> ($@s.MissingValue.ToString("F2") a costo)</span>
+                <span class="text-success">Sobran: <strong>@s.ExtraUnits u</strong> ($@s.ExtraValue.ToString("F2") a costo)</span>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-danger py-2">@error</div>
+    }
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Buscar</label>
+                    <input type="text" class="form-control" placeholder="Código, nombre o descripción..."
+                           @bind="searchText" @bind:event="oninput" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Categoría</label>
+                    <select class="form-select" @bind="category">
+                        <option value="">Todas</option>
+                        @foreach (var c in categories)
+                        {
+                            <option value="@c">@c</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="only-unverified" @bind="onlyUnverified" />
+                        <label class="form-check-label" for="only-unverified">Solo sin verificar</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="only-difference" @bind="onlyWithDifference" />
+                        <label class="form-check-label" for="only-difference">Solo con diferencia</label>
+                    </div>
+                </div>
+                <div class="col-md-1">
+                    <button class="btn btn-outline-secondary w-100" @onclick="ClearFilters">Limpiar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-muted small mb-2">@filtered.Count de @inProgress.Items.Count productos</p>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover zebra-striped count-table">
+            <thead>
+                <tr>
+                    <th class="text-center" title="Verificado">✓</th>
+                    <th></th>
+                    <th>Código</th>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th class="text-end">Sistema</th>
+                    <th class="text-center" title="+ sobran / − faltan">Diferencia</th>
+                    <th class="text-end">Contado</th>
+                    <th>Nota</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in filtered)
+                {
+                    var rowClass = item.Difference != 0 ? "row-difference" : item.Verified ? "row-verified" : "";
+                    <tr class="@rowClass">
+                        <td class="text-center">
+                            <input class="form-check-input count-check" type="checkbox" checked="@item.Verified"
+                                   @onchange="e => ChangeVerified(item, (bool)(e.Value ?? false))" />
+                        </td>
+                        <td class="thumb-cell">
+                            <ProductImage Src="@ImageOf(item)" Height="34" Title="@item.ProductName" />
+                        </td>
+                        <td class="text-nowrap">@item.Code</td>
+                        <td>
+                            @item.ProductName
+                            @if (!string.IsNullOrWhiteSpace(item.ProductDescription))
+                            {
+                                <span class="text-muted"> - @item.ProductDescription</span>
+                            }
+                        </td>
+                        <td>@item.Category</td>
+                        <td class="text-end">@item.SystemStock</td>
+                        <td class="text-center">
+                            <input type="number" class="form-control form-control-sm diff-input" step="1"
+                                   value="@item.Difference"
+                                   @onchange="e => ChangeDifference(item, e.Value?.ToString())" />
+                        </td>
+                        <td class="text-end fw-semibold">@item.Counted</td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm" placeholder="Motivo (opcional)"
+                                   value="@item.Note" @onchange="e => ChangeNote(item, e.Value?.ToString())" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<h4 class="mt-4">Arqueos anteriores</h4>
+@if (!loading && finished.Count == 0)
+{
+    <p class="text-muted">Todavía no hay arqueos finalizados.</p>
+}
+else if (finished.Count > 0)
+{
+    <div class="table-responsive">
+        <table class="table table-sm table-hover zebra-striped">
+            <thead>
+                <tr>
+                    <th>N°</th>
+                    <th>Iniciado</th>
+                    <th>Finalizado</th>
+                    <th>Por</th>
+                    <th class="text-center">Verificados</th>
+                    <th class="text-center">Con diferencia</th>
+                    <th class="text-end">Faltantes</th>
+                    <th class="text-end">Sobrantes</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var a in finished)
+                {
+                    var s = StockCountSummary.Of(a);
+                    var open = expandedId == a.Id;
+                    <tr>
+                        <td class="text-nowrap">
+                            <button class="btn btn-sm btn-link chevron-btn" @onclick="() => expandedId = open ? null : a.Id"
+                                    title="Ver diferencias">
+                                <span class="chevron @(open ? "expanded" : "")">▶</span>
+                            </button>
+                            <strong>#@a.Id</strong>
+                        </td>
+                        <td>@a.StartedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@a.FinishedAt?.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@(a.FinishedBy ?? a.StartedBy ?? "—")</td>
+                        <td class="text-center">@s.Verified / @s.Items</td>
+                        <td class="text-center">@s.WithDifference</td>
+                        <td class="text-end text-danger">@s.MissingUnits u · $@s.MissingValue.ToString("F2")</td>
+                        <td class="text-end text-success">@s.ExtraUnits u · $@s.ExtraValue.ToString("F2")</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => PrintPdf(a)">PDF</button>
+                        </td>
+                    </tr>
+                    @if (open)
+                    {
+                        var changed = a.Items.Where(i => i.Difference != 0 || !string.IsNullOrEmpty(i.Note)).ToList();
+                        <tr class="detail-row">
+                            <td colspan="9">
+                                @if (changed.Count == 0)
+                                {
+                                    <p class="text-muted mb-0 p-2">Sin diferencias: el stock coincidió en todos los productos.</p>
+                                }
+                                else
+                                {
+                                    <table class="table table-sm mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Código</th>
+                                                <th>Producto</th>
+                                                <th class="text-end">Sistema</th>
+                                                <th class="text-end">Contado</th>
+                                                <th class="text-end">Diferencia</th>
+                                                <th class="text-end">Valor (costo)</th>
+                                                <th>Nota</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var i in changed)
+                                            {
+                                                <tr>
+                                                    <td>@i.Code</td>
+                                                    <td>@i.ProductName @(string.IsNullOrWhiteSpace(i.ProductDescription) ? "" : $"- {i.ProductDescription}")</td>
+                                                    <td class="text-end">@i.SystemStock</td>
+                                                    <td class="text-end">@i.Counted</td>
+                                                    <td class="text-end fw-semibold @(i.Difference < 0 ? "text-danger" : i.Difference > 0 ? "text-success" : "")">
+                                                        @(i.Difference > 0 ? $"+{i.Difference}" : i.Difference.ToString())
+                                                    </td>
+                                                    <td class="text-end">$@((i.Difference * i.PurchasePrice).ToString("F2"))</td>
+                                                    <td>@i.Note</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private StockCount? inProgress;
+    private List<StockCount> finished = new();
+    private List<string> categories = new();
+    private Dictionary<int, Product> productsById = new();
+    private Func<Product, string?> imageOf = _ => null;
+    private bool loading = true;
+    private bool working;
+    private string error = string.Empty;
+    private int? expandedId;
+
+    private string searchText = string.Empty;
+    private string category = string.Empty;
+    private bool onlyUnverified;
+    private bool onlyWithDifference;
+
+    private List<StockCountItem> Filtered
+    {
+        get
+        {
+            IEnumerable<StockCountItem> q = inProgress?.Items ?? new List<StockCountItem>();
+            if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                var t = searchText.Trim();
+                q = q.Where(i =>
+                    i.ProductName.Contains(t, StringComparison.OrdinalIgnoreCase)
+                    || i.ProductDescription.Contains(t, StringComparison.OrdinalIgnoreCase)
+                    || (i.Code?.Contains(t, StringComparison.OrdinalIgnoreCase) ?? false));
+            }
+            if (!string.IsNullOrEmpty(category))
+                q = q.Where(i => i.Category == category);
+            if (onlyUnverified)
+                q = q.Where(i => !i.Verified);
+            if (onlyWithDifference)
+                q = q.Where(i => i.Difference != 0);
+            return q.ToList();
+        }
+    }
+
+    // The product's current image (manual or the distributor's); nothing if it no longer exists.
+    private string? ImageOf(StockCountItem item) =>
+        productsById.TryGetValue(item.ProductId, out var p) ? imageOf(p) : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        imageOf = await DistributorService.GetProductUrlResolverAsync();
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        inProgress = await StockCountService.GetInProgressAsync();
+        finished = await StockCountService.GetFinishedAsync();
+        productsById = (await ProductService.GetAllAsync()).ToDictionary(p => p.Id);
+        categories = (inProgress?.Items ?? new())
+            .Where(i => !string.IsNullOrEmpty(i.Category)).Select(i => i.Category!)
+            .Distinct().OrderBy(c => c).ToList();
+        loading = false;
+    }
+
+    private async Task Start()
+    {
+        working = true;
+        error = string.Empty;
+        try
+        {
+            // The count takes a picture of the stock: phone sales must be in it first. Otherwise
+            // the units would show up as missing and then be discounted again by the sale.
+            var import = await EventImport.RunOnceAsync();
+            if (!import.Drained && !await JS.InvokeAsync<bool>("confirm",
+                    "No se pudieron traer las ventas hechas en el celular.\n\n" +
+                    "Si iniciás el arqueo ahora, una venta que todavía no entró puede figurar como faltante " +
+                    "y descontarse dos veces.\n\n¿Iniciar igual?"))
+                return;
+
+            var (ok, err) = await StockCountService.StartAsync();
+            if (!ok)
+                error = err ?? "No se pudo iniciar el arqueo.";
+            await Load();
+            if (!ok)
+                await JS.InvokeVoidAsync("alert", error);
+        }
+        catch (Exception ex)
+        {
+            ErrorHub.Report(ex, "No se pudo iniciar el arqueo");
+        }
+        finally
+        {
+            working = false;
+        }
+    }
+
+    // Every change is saved right away (the count can be resumed).
+    private Task ChangeVerified(StockCountItem item, bool verified)
+    {
+        item.Verified = verified;
+        return Save(item);
+    }
+
+    private Task ChangeDifference(StockCountItem item, string? value)
+    {
+        if (!int.TryParse(value, out var diff))
+            diff = 0;
+        // The counted quantity cannot be negative.
+        if (diff < -item.SystemStock)
+            diff = -item.SystemStock;
+        item.Difference = diff;
+        // Entering a difference means the product was counted.
+        if (diff != 0)
+            item.Verified = true;
+        return Save(item);
+    }
+
+    private Task ChangeNote(StockCountItem item, string? note)
+    {
+        item.Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        return Save(item);
+    }
+
+    private async Task Save(StockCountItem item)
+    {
+        try
+        {
+            await StockCountService.SaveItemAsync(item);
+        }
+        catch (Exception ex)
+        {
+            ErrorHub.Report(ex, "No se pudo guardar el renglón del arqueo");
+        }
+    }
+
+    private async Task Finish()
+    {
+        if (inProgress == null)
+            return;
+        var s = StockCountSummary.Of(inProgress);
+        var unverified = s.Items - s.Verified;
+        var message = "¿Finalizar el arqueo?\n\n" +
+            (unverified > 0 ? $"Hay {unverified} producto(s) sin verificar: se toman como correctos.\n" : "") +
+            (s.WithDifference > 0
+                ? $"Se va a ajustar el stock de {s.WithDifference} producto(s): faltan {s.MissingUnits} u, sobran {s.ExtraUnits} u."
+                : "No hay diferencias: el stock no cambia.") +
+            "\n\nUna vez finalizado no se puede modificar.";
+        if (!await JS.InvokeAsync<bool>("confirm", message))
+            return;
+
+        working = true;
+        try
+        {
+            var (ok, err) = await StockCountService.FinishAsync(inProgress.Id);
+            if (!ok)
+                await JS.InvokeVoidAsync("alert", err ?? "No se pudo finalizar el arqueo.");
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            ErrorHub.Report(ex, "No se pudo finalizar el arqueo");
+        }
+        finally
+        {
+            working = false;
+        }
+    }
+
+    private async Task Discard()
+    {
+        if (inProgress == null)
+            return;
+        if (!await JS.InvokeAsync<bool>("confirm",
+                "¿Descartar el arqueo en curso?\n\nSe pierde lo marcado y el stock no cambia."))
+            return;
+
+        working = true;
+        try
+        {
+            await StockCountService.DiscardAsync(inProgress.Id);
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            ErrorHub.Report(ex, "No se pudo descartar el arqueo");
+        }
+        finally
+        {
+            working = false;
+        }
+    }
+
+    private void PrintPdf(StockCount count)
+    {
+        try
+        {
+            StockCountPdf.Export(count);
+        }
+        catch (Exception ex)
+        {
+            ErrorHub.Report(ex, "No se pudo generar el PDF del arqueo");
+        }
+    }
+
+    private void ClearFilters()
+    {
+        searchText = string.Empty;
+        category = string.Empty;
+        onlyUnverified = false;
+        onlyWithDifference = false;
+    }
+}

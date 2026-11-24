@@ -1,0 +1,195 @@
+@page "/users"
+@attribute [Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Authorization
+@using panialera.Auth
+@using panialera.Models
+@using panialera.Services
+@inject AuthService AuthService
+@inject AppAuthenticationStateProvider AuthState
+@inject IJSRuntime JS
+
+<div class="users-container">
+    <div class="users-form-section">
+        <h4>@(editingUser == null ? "Crear Nuevo Usuario" : $"Editar Usuario: {editingUser.Name}")</h4>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label for="username" class="form-label">Nombre</label>
+                <input type="text" class="form-control" id="username" @bind="userName" @bind:event="oninput"
+                       disabled="@(editingUser != null)" />
+            </div>
+            <div class="col-md-4">
+                <label for="password" class="form-label">
+                    @(editingUser == null ? "Contraseña" : "Nueva contraseña (opcional)")
+                </label>
+                <input type="password" class="form-control" id="password" @bind="password" @bind:event="oninput"
+                       placeholder="@(editingUser == null ? "" : "Dejar en blanco para no cambiar")" />
+            </div>
+            <div class="col-md-2">
+                <label for="role" class="form-label">Rol</label>
+                <select class="form-select" id="role" @bind="role">
+                    @if (editingUser != null)
+                    {
+                        <option value="@UserRole.Admin">Admin</option>
+                    }
+                    <option value="@UserRole.Employee">Empleado</option>
+                    <option value="@UserRole.Manager">Jefe</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                @if (editingUser == null)
+                {
+                    <button class="btn btn-success w-100" @onclick="CreateUser">Crear Usuario</button>
+                }
+                else
+                {
+                    <button class="btn btn-primary" @onclick="SaveUser">Guardar</button>
+                    <button class="btn btn-outline-secondary" @onclick="CancelEdit">Cancelar</button>
+                }
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div class="alert @(isError ? "alert-danger" : "alert-success") py-2 mt-3 mb-0" role="alert">
+                @message
+            </div>
+        }
+    </div>
+
+    <div class="users-table-section">
+        <h3>Usuarios Registrados</h3>
+        @if (users.Count == 0)
+        {
+            <p class="text-muted">No hay usuarios registrados.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover zebra-striped">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Rol</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in users)
+                        {
+                            <tr class="@(editingUser?.Id == u.Id ? "editing-row" : "")">
+                                <td>@u.Name</td>
+                                <td>@u.Role.DisplayName()</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <EditButton OnClick="() => EditUser(u)" />
+                                        <DeleteButton OnClick="() => DeleteUser(u)" />
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string userName = string.Empty;
+    private string password = string.Empty;
+    private UserRole role = UserRole.Employee;
+    private string message = string.Empty;
+    private bool isError = false;
+    private List<User> users = new();
+    private User? editingUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        users = await AuthService.GetAllAsync();
+    }
+
+    private async Task CreateUser()
+    {
+        var (ok, err) = await AuthService.CreateUserAsync(userName, password, role);
+        if (ok)
+        {
+            ShowMessage($"Usuario '{userName.Trim()}' creado correctamente.", false);
+            ResetForm();
+            await LoadUsers();
+        }
+        else
+        {
+            ShowMessage(err ?? "No se pudo crear el usuario.", true);
+        }
+    }
+
+    private void EditUser(User u)
+    {
+        editingUser = u;
+        userName = u.Name;
+        password = string.Empty;
+        role = u.Role;
+        message = string.Empty;
+    }
+
+    private async Task SaveUser()
+    {
+        if (editingUser == null)
+            return;
+
+        var (ok, err) = await AuthService.UpdateUserAsync(editingUser.Id, role, password);
+        if (ok)
+        {
+            ShowMessage($"Usuario '{editingUser.Name}' actualizado.", false);
+            ResetForm();
+            await LoadUsers();
+        }
+        else
+        {
+            ShowMessage(err ?? "No se pudo actualizar el usuario.", true);
+        }
+    }
+
+    private void CancelEdit()
+    {
+        ResetForm();
+    }
+
+    private async Task DeleteUser(User u)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar al usuario '{u.Name}'?"))
+            return;
+
+        var (ok, err) = await AuthService.DeleteUserAsync(u.Id, AuthState.CurrentUserId);
+        if (ok)
+        {
+            ShowMessage($"Usuario '{u.Name}' eliminado.", false);
+            if (editingUser?.Id == u.Id)
+                ResetForm();
+            await LoadUsers();
+        }
+        else
+        {
+            ShowMessage(err ?? "No se pudo eliminar el usuario.", true);
+        }
+    }
+
+    private void ResetForm()
+    {
+        editingUser = null;
+        userName = string.Empty;
+        password = string.Empty;
+        role = UserRole.Employee;
+    }
+
+    private void ShowMessage(string msg, bool error)
+    {
+        message = msg;
+        isError = error;
+    }
+}

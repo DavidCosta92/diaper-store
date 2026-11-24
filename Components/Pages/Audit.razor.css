@@ -1,0 +1,67 @@
+.cat-check {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    margin-bottom: 4px;
+}
+
+.audit-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #fff;
+    background-color: #6c757d;
+    white-space: nowrap;
+}
+
+.audit-products { background-color: #8e44ad; }
+.audit-stock { background-color: #2980b9; }
+.audit-sales { background-color: #27ae60; }
+.audit-customers { background-color: #d35400; }
+.audit-expenses { background-color: #c0392b; }
+.audit-todos { background-color: #16a085; }
+.audit-users { background-color: #34495e; }
+.audit-distributor { background-color: #b7950b; }
+.audit-stockcounts { background-color: #6c5ce7; }
+.audit-session { background-color: #7f8c8d; }
+.audit-system { background-color: #95a5a6; }
+.audit-errors { background-color: #e74c3c; }
+
+.audit-table td {
+    vertical-align: middle;
+}
+
+.audit-table tr.clickable {
+    cursor: pointer;
+}
+
+.audit-table tr.row-error td {
+    background-color: #fdecea;
+}
+
+.chevron {
+    display: inline-block;
+    font-size: 0.7rem;
+    margin-right: 4px;
+    color: #888;
+    transition: transform 0.15s;
+}
+
+.chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.detail-row td {
+    background-color: #f8f9fa;
+}
+
+.audit-detail {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.82rem;
+    max-height: 300px;
+    overflow: auto;
+}

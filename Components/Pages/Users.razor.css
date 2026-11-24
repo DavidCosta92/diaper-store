@@ -1,0 +1,29 @@
+.users-container {
+    padding: 20px;
+}
+
+.users-form-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    background-color: #f9f9f9;
+}
+
+.users-table-section {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+
+.users-form-section h4 {
+    margin-bottom: 20px;
+    font-weight: 600;
+}
+
+.users-table-section h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-weight: 600;
+}

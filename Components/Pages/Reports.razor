@@ -1,0 +1,368 @@
+@page "/reports"
+@attribute [Authorize]
+@using System.Globalization
+@using System.Text
+@using panialera.Models
+@using panialera.Services
+@inject SaleService SaleService
+@inject ProductService ProductService
+@inject AuthService AuthService
+@inject ExpenseService ExpenseService
+
+<div class="reports-container">
+    <h1>Reportes</h1>
+
+    <div class="reports-filters">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-2">
+                <label for="from" class="form-label">Desde</label>
+                <input type="date" class="form-control" id="from" @bind="fromDate" />
+            </div>
+            <div class="col-md-2">
+                <label for="to" class="form-label">Hasta</label>
+                <input type="date" class="form-control" id="to" @bind="toDate" />
+            </div>
+            <div class="col-md-3">
+                <label for="product" class="form-label">Producto</label>
+                <input type="text" class="form-select" id="product" list="report-product-list"
+                       placeholder="Todos los productos"
+                       value="@productFilterInput" @onchange="OnProductFilterChanged" />
+                <datalist id="report-product-list">
+                    @foreach (var p in products)
+                    {
+                        <option value="@($"{p.Name} - {p.Description}")" />
+                    }
+                </datalist>
+            </div>
+            <div class="col-md-3">
+                <label for="seller" class="form-label">Vendedor</label>
+                <select class="form-select" id="seller" @bind="selectedUserId">
+                    <option value="0">Todos los vendedores</option>
+                    @foreach (var u in users)
+                    {
+                        <option value="@u.Id">@u.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="split-by-payment" @bind="splitByType" @bind:after="LoadReport" />
+                    <label class="form-check-label" for="split-by-payment">Tipo de pago</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-primary" @onclick="ApplyFilters">Filtrar</button>
+            <button class="btn btn-outline-secondary" @onclick="ClearFilters">Limpiar</button>
+            <button class="btn btn-outline-primary ms-auto" @onclick="ExportCsv">Exportar CSV</button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(exportMessage))
+        {
+            <div class="alert alert-success py-2 mt-3 mb-0" role="alert">@exportMessage</div>
+        }
+    </div>
+
+    <div class="reports-summary my-3">
+        <div class="row g-3">
+            <div class="col-md-2">
+                <div class="summary-card summary-revenue">
+                    @if (splitByType)
+                    {
+                        <div class="summary-split-item">
+                            <div class="summary-label">Facturación efectivo</div>
+                            <div class="summary-value-sm">$@rowsCash.Sum(r => r.TotalRevenue).ToString("F2")</div>
+                        </div>
+                        <div class="summary-divider"></div>
+                        <div class="summary-split-item">
+                            <div class="summary-label">Facturación MP</div>
+                            <div class="summary-value-sm">$@rowsMp.Sum(r => r.TotalRevenue).ToString("F2")</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="summary-label">Facturación total</div>
+                        <div class="summary-value">$@rows.Sum(r => r.TotalRevenue).ToString("F2")</div>
+                    }
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="summary-card summary-profit">
+                    <div class="summary-label">Ganancia total</div>
+                    <div class="summary-value">$@rows.Sum(r => r.TotalProfit).ToString("F2")</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="summary-card summary-discounts">
+                    <div class="summary-label">Total descuentos</div>
+                    <div class="summary-value">$@discounts.Sum(d => d.Total).ToString("F2")</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="summary-card summary-expenses">
+                    <div class="summary-label">Total egresos</div>
+                    <div class="summary-value">$@expenses.Sum(e => e.Amount).ToString("F2")</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="summary-card summary-net">
+                    <div class="summary-label">Resultado neto (ganancia − descuentos − egresos)</div>
+                    <div class="summary-value">$@NetResult.ToString("F2")</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="summary-card summary-inventory"
+                     title="Stock actual valorizado (no depende de los filtros). Productos con stock 0 no suman.">
+                    <div class="summary-split-item">
+                        <div class="summary-label">Mercadería a costo</div>
+                        <div class="summary-value-sm">$@InventoryAtCost.ToString("F2")</div>
+                    </div>
+                    <div class="summary-divider"></div>
+                    <div class="summary-split-item">
+                        <div class="summary-label">Mercadería a precio de venta</div>
+                        <div class="summary-value-sm">$@InventoryAtSalePrice.ToString("F2")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="reports-table-section">
+        <h4 class="section-title">Ingresos</h4>
+        @if (splitByType)
+        {
+            <ProfitTable Title="Efectivo" Rows="rowsCash" />
+            <ProfitTable Title="Mercado Pago" Rows="rowsMp" />
+        }
+        else
+        {
+            <ProfitTable Rows="rows" />
+        }
+    </div>
+
+    <div class="reports-table-section mt-3">
+        <h4 class="section-title">Descuentos</h4>
+        @if (discounts.Count == 0)
+        {
+            <p class="text-muted">No hay descuentos en el período seleccionado.</p>
+        }
+        else if (splitByType)
+        {
+            <DiscountsTable Title="Efectivo" Discounts="discountsCash" />
+            <DiscountsTable Title="Mercado Pago" Discounts="discountsMp" />
+        }
+        else
+        {
+            <DiscountsTable Discounts="discounts" />
+        }
+    </div>
+
+    <div class="reports-table-section mt-3">
+        <h4 class="section-title">Egresos</h4>
+        @if (expenses.Count == 0)
+        {
+            <p class="text-muted">No hay egresos en el período seleccionado.</p>
+        }
+        else if (splitByType)
+        {
+            <ExpensesTable Title="Efectivo" Expenses="expensesCash" />
+            <ExpensesTable Title="Mercado Pago" Expenses="expensesMp" />
+        }
+        else
+        {
+            <ExpensesTable Expenses="expenses" />
+        }
+    </div>
+</div>
+
+@code {
+    private List<Product> products = new();
+    private List<User> users = new();
+    private List<ProfitReportRow> rows = new();
+    private List<ProfitReportRow> rowsCash = new();
+    private List<ProfitReportRow> rowsMp = new();
+    private List<Expense> expenses = new();
+    private List<DiscountReportRow> discounts = new();
+    private List<DiscountReportRow> discountsCash = new();
+    private List<DiscountReportRow> discountsMp = new();
+
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private int selectedProductId = 0;
+    private int selectedUserId = 0;
+    private string productFilterInput = string.Empty;
+    private bool splitByType = false;
+    private string exportMessage = string.Empty;
+
+    // Value of the current stock (today's snapshot, regardless of the date/seller filters).
+    private decimal InventoryAtCost => products.Sum(p => Math.Max(0, p.Stock) * p.PurchasePrice);
+    private decimal InventoryAtSalePrice => products.Sum(p => Math.Max(0, p.Stock) * p.SalePrice);
+
+    private decimal NetResult =>
+        rows.Sum(r => r.TotalProfit) - discounts.Sum(d => d.Total) - expenses.Sum(e => e.Amount);
+
+    private List<Expense> expensesCash => expenses.Where(e => e.PaymentType == PaymentType.Cash).ToList();
+    private List<Expense> expensesMp => expenses.Where(e => e.PaymentType == PaymentType.MercadoPago).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await AuthService.GetAllAsync();
+        await LoadReport();
+    }
+
+    private void OnProductFilterChanged(ChangeEventArgs e)
+    {
+        productFilterInput = e.Value?.ToString() ?? string.Empty;
+
+        var match = products.FirstOrDefault(p =>
+            $"{p.Name} - {p.Description}".Equals(productFilterInput, StringComparison.OrdinalIgnoreCase));
+        selectedProductId = match?.Id ?? 0;
+    }
+
+    private async Task LoadReport()
+    {
+        exportMessage = string.Empty;
+        products = await ProductService.GetAllAsync(); // fresh stock for the inventory value
+        int? productId = selectedProductId > 0 ? selectedProductId : null;
+        int? userId = selectedUserId > 0 ? selectedUserId : null;
+
+        rows = await SaleService.GetProfitReportAsync(fromDate, toDate, productId, userId);
+        expenses = await ExpenseService.GetByRangeAsync(fromDate, toDate);
+        discounts = await SaleService.GetDiscountReportAsync(fromDate, toDate, userId);
+
+        if (splitByType)
+        {
+            rowsCash = await SaleService.GetProfitReportAsync(fromDate, toDate, productId, userId, PaymentType.Cash);
+            rowsMp = await SaleService.GetProfitReportAsync(fromDate, toDate, productId, userId, PaymentType.MercadoPago);
+            discountsCash = await SaleService.GetDiscountReportAsync(fromDate, toDate, userId, PaymentType.Cash);
+            discountsMp = await SaleService.GetDiscountReportAsync(fromDate, toDate, userId, PaymentType.MercadoPago);
+        }
+    }
+
+    private async Task ApplyFilters() => await LoadReport();
+
+    private async Task ClearFilters()
+    {
+        fromDate = null;
+        toDate = null;
+        selectedProductId = 0;
+        selectedUserId = 0;
+        productFilterInput = string.Empty;
+        splitByType = false;
+        await LoadReport();
+    }
+
+    private void ExportCsv()
+    {
+        var sb = new StringBuilder();
+        string F(string? s) => CsvExporter.Field(s);
+        // Decimal point (invariant) so it does not clash with the CSV comma separator.
+        string M(decimal d) => d.ToString("F2", CultureInfo.InvariantCulture);
+
+        var seller = selectedUserId > 0
+            ? users.FirstOrDefault(u => u.Id == selectedUserId)?.Name ?? "-"
+            : "Todos";
+
+        sb.AppendLine("Reporte de Ganancias");
+        sb.AppendLine($"Desde,{F(fromDate?.ToString("dd/MM/yyyy") ?? "-")}");
+        sb.AppendLine($"Hasta,{F(toDate?.ToString("dd/MM/yyyy") ?? "-")}");
+        sb.AppendLine($"Producto,{F(selectedProductId > 0 ? productFilterInput : "Todos")}");
+        sb.AppendLine($"Vendedor,{F(seller)}");
+        sb.AppendLine($"Desglose por tipo de pago,{(splitByType ? "Si" : "No")}");
+        sb.AppendLine();
+
+        sb.AppendLine("RESUMEN");
+        if (splitByType)
+        {
+            sb.AppendLine($"Facturacion efectivo,{M(rowsCash.Sum(r => r.TotalRevenue))}");
+            sb.AppendLine($"Facturacion MP,{M(rowsMp.Sum(r => r.TotalRevenue))}");
+        }
+        else
+        {
+            sb.AppendLine($"Facturacion total,{M(rows.Sum(r => r.TotalRevenue))}");
+        }
+        sb.AppendLine($"Ganancia total,{M(rows.Sum(r => r.TotalProfit))}");
+        sb.AppendLine($"Total descuentos,{M(discounts.Sum(d => d.Total))}");
+        sb.AppendLine($"Total egresos,{M(expenses.Sum(e => e.Amount))}");
+        sb.AppendLine($"Resultado neto,{M(NetResult)}");
+        sb.AppendLine($"Mercaderia a costo (stock actual),{M(InventoryAtCost)}");
+        sb.AppendLine($"Mercaderia a precio de venta (stock actual),{M(InventoryAtSalePrice)}");
+        sb.AppendLine();
+
+        if (splitByType)
+        {
+            AppendProfitSection(sb, "INGRESOS - EFECTIVO", rowsCash, M, F);
+            sb.AppendLine();
+            AppendProfitSection(sb, "INGRESOS - MERCADO PAGO", rowsMp, M, F);
+        }
+        else
+        {
+            AppendProfitSection(sb, "INGRESOS", rows, M, F);
+        }
+        sb.AppendLine();
+
+        if (splitByType)
+        {
+            AppendDiscountsSection(sb, "DESCUENTOS - EFECTIVO", discountsCash, M, F);
+            sb.AppendLine();
+            AppendDiscountsSection(sb, "DESCUENTOS - MERCADO PAGO", discountsMp, M, F);
+        }
+        else
+        {
+            AppendDiscountsSection(sb, "DESCUENTOS", discounts, M, F);
+        }
+        sb.AppendLine();
+
+        if (splitByType)
+        {
+            AppendExpensesSection(sb, "EGRESOS - EFECTIVO", expensesCash, M, F);
+            sb.AppendLine();
+            AppendExpensesSection(sb, "EGRESOS - MERCADO PAGO", expensesMp, M, F);
+        }
+        else
+        {
+            AppendExpensesSection(sb, "EGRESOS", expenses, M, F);
+        }
+
+        var path = CsvExporter.Export("resumen", sb.ToString());
+        exportMessage = $"Exportado a: {path}";
+    }
+
+    private static void AppendProfitSection(StringBuilder sb, string header,
+        List<ProfitReportRow> data, Func<decimal, string> M, Func<string?, string> F)
+    {
+        sb.AppendLine(header);
+        sb.AppendLine("Producto,PrecioCompraProm,PrecioVentaProm,GananciaXItem,ItemsVendidos,Facturacion,GananciaTotal");
+        foreach (var r in data)
+        {
+            sb.AppendLine($"{F($"{r.ProductName} - {r.ProductDescription}")},{M(r.AvgPurchasePrice)},{M(r.AvgSalePrice)},{M(r.ProfitPerUnit)},{r.UnitsSold},{M(r.TotalRevenue)},{M(r.TotalProfit)}");
+        }
+        sb.AppendLine($"TOTALES,,,,{data.Sum(r => r.UnitsSold)},{M(data.Sum(r => r.TotalRevenue))},{M(data.Sum(r => r.TotalProfit))}");
+    }
+
+    private static void AppendDiscountsSection(StringBuilder sb, string header,
+        List<DiscountReportRow> data, Func<decimal, string> M, Func<string?, string> F)
+    {
+        sb.AppendLine(header);
+        sb.AppendLine("Motivo,Cantidad,TotalDescontado");
+        foreach (var d in data)
+        {
+            sb.AppendLine($"{F(d.Reason)},{d.Count},{M(d.Total)}");
+        }
+        sb.AppendLine($"Total,,{M(data.Sum(d => d.Total))}");
+    }
+
+    private static void AppendExpensesSection(StringBuilder sb, string header,
+        List<Expense> data, Func<decimal, string> M, Func<string?, string> F)
+    {
+        sb.AppendLine(header);
+        sb.AppendLine("Fecha,Nombre,Descripcion,Tipo,Valor");
+        foreach (var e in data)
+        {
+            var paymentLabel = e.PaymentType == PaymentType.MercadoPago ? "Mercado Pago" : "Efectivo";
+            sb.AppendLine($"{e.Date:dd/MM/yyyy},{F(e.Name)},{F(e.Description)},{paymentLabel},{M(e.Amount)}");
+        }
+        sb.AppendLine($"Total,,,,{M(data.Sum(e => e.Amount))}");
+    }
+}
