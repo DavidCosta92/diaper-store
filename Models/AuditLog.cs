@@ -15,7 +15,8 @@ public enum AuditCategory
     StockCounts,
     Session,
     System,
-    Errors
+    Errors,
+    Insights
 }
 
 public static class AuditCategoryExtensions
@@ -35,6 +36,7 @@ public static class AuditCategoryExtensions
         AuditCategory.Session => "Sesión",
         AuditCategory.System => "Sistema",
         AuditCategory.Errors => "Errores",
+        AuditCategory.Insights => "Insights",
         _ => c.ToString()
     };
 }
@@ -48,6 +50,7 @@ public static class AuditEntity
     public const string Expense = "Expense";
     public const string TodoItem = "TodoItem";
     public const string User = "User";
+    public const string AiAnalysis = "AiAnalysis";
     public const string StockCount = "StockCount";
 }
 

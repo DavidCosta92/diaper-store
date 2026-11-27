@@ -17,6 +17,204 @@ namespace panialera.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
 
+            modelBuilder.Entity("panialera.Models.AiAnalysis", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AnsweredBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("CostUsd")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorDetail")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InputJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("InputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OutputJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("OutputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("PeriodFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("PeriodTo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PromptVersion")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResponseId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StopReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserName")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAt");
+
+                    b.ToTable("AiAnalyses");
+                });
+
+            modelBuilder.Entity("panialera.Models.AiFinding", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AiAnalysisId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Chart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Confidence")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Direction")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Evidence")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Feedback")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("FeedbackAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FeedbackBy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AiAnalysisId");
+
+                    b.ToTable("AiFindings");
+                });
+
+            modelBuilder.Entity("panialera.Models.AiFindingNote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AiFindingId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserName")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AiFindingId");
+
+                    b.ToTable("AiFindingNotes");
+                });
+
+            modelBuilder.Entity("panialera.Models.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("AppSettings");
+                });
+
             modelBuilder.Entity("panialera.Models.AuditLog", b =>
                 {
                     b.Property<int>("Id")
@@ -441,6 +639,35 @@ namespace panialera.Migrations
                     b.ToTable("StockCountItems");
                 });
 
+            modelBuilder.Entity("panialera.Models.StockSnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("PurchasePrice")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("SalePrice")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Stock")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("StockSnapshots");
+                });
+
             modelBuilder.Entity("panialera.Models.TodoItem", b =>
                 {
                     b.Property<int>("Id")
@@ -499,6 +726,28 @@ namespace panialera.Migrations
                         .IsUnique();
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("panialera.Models.AiFinding", b =>
+                {
+                    b.HasOne("panialera.Models.AiAnalysis", "Analysis")
+                        .WithMany("Findings")
+                        .HasForeignKey("AiAnalysisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Analysis");
+                });
+
+            modelBuilder.Entity("panialera.Models.AiFindingNote", b =>
+                {
+                    b.HasOne("panialera.Models.AiFinding", "Finding")
+                        .WithMany("Notes")
+                        .HasForeignKey("AiFindingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Finding");
                 });
 
             modelBuilder.Entity("panialera.Models.Product", b =>
@@ -569,6 +818,16 @@ namespace panialera.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("panialera.Models.AiAnalysis", b =>
+                {
+                    b.Navigation("Findings");
+                });
+
+            modelBuilder.Entity("panialera.Models.AiFinding", b =>
+                {
+                    b.Navigation("Notes");
                 });
 
             modelBuilder.Entity("panialera.Models.Sale", b =>

@@ -21,6 +21,11 @@ public class PanialContext : DbContext
     public DbSet<StockCount> StockCounts { get; set; }
     public DbSet<StockCountItem> StockCountItems { get; set; }
     public DbSet<RemoteEventImport> RemoteEventImports { get; set; }
+    public DbSet<AppSetting> AppSettings { get; set; }
+    public DbSet<StockSnapshot> StockSnapshots { get; set; }
+    public DbSet<AiAnalysis> AiAnalyses { get; set; }
+    public DbSet<AiFinding> AiFindings { get; set; }
+    public DbSet<AiFindingNote> AiFindingNotes { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -95,5 +100,34 @@ public class PanialContext : DbContext
             .IsUnique();
 
         modelBuilder.Entity<RemoteEventImport>().HasKey(r => r.EventId);
+        modelBuilder.Entity<AppSetting>().HasKey(s => s.Key);
+
+        // Daily stock photo: one row per product and day. No FK to Products (history).
+        modelBuilder.Entity<StockSnapshot>().HasIndex(s => new { s.Date, s.ProductId }).IsUnique();
+
+        // AI analyses: statuses as text (adding values does not break old rows); the findings
+        // go with their analysis. No FK to Users, like the audit log.
+        modelBuilder.Entity<AiAnalysis>(e =>
+        {
+            e.Property(a => a.Status).HasConversion<string>();
+            e.HasIndex(a => a.StartedAt);
+        });
+        modelBuilder.Entity<AiFinding>(e =>
+        {
+            e.Property(f => f.Kind).HasConversion<string>();
+            e.Property(f => f.Feedback).HasConversion<string>();
+            e.HasOne(f => f.Analysis)
+                .WithMany(a => a.Findings)
+                .HasForeignKey(f => f.AiAnalysisId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<AiFindingNote>(e =>
+        {
+            e.Property(n => n.Text).HasMaxLength(AiFindingNote.MaxLength);
+            e.HasOne(n => n.Finding)
+                .WithMany(f => f.Notes)
+                .HasForeignKey(n => n.AiFindingId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }
