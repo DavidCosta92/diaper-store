@@ -9,6 +9,24 @@ public class TodoService(IDbContextFactory<PanialContext> factory, AuditService 
 {
     private readonly IDbContextFactory<PanialContext> _factory = factory;
 
+    // Raised after any change, so every open view (the Pendientes page and the sticky note)
+    // shows the same list.
+    public event Action? Changed;
+
+    private void Notify() => Changed?.Invoke();
+
+    // The ones still to do, highest priority first, then the newest.
+    public async Task<List<TodoItem>> GetOpenAsync()
+    {
+        await using var db = _factory.CreateDbContext();
+        return await db.TodoItems
+            .Include(t => t.Customer)
+            .Where(t => !t.Completed)
+            .OrderBy(t => t.Priority)
+            .ThenByDescending(t => t.CreatedAt)
+            .ToListAsync();
+    }
+
     public async Task<List<TodoItem>> GetAllAsync()
     {
         await using var db = _factory.CreateDbContext();
@@ -36,6 +54,7 @@ public class TodoService(IDbContextFactory<PanialContext> factory, AuditService 
             (customer == null ? "" : $"\nCliente: {customer}") +
             (string.IsNullOrWhiteSpace(todo.Description) ? "" : $"\nDescripción: {todo.Description}"),
             AuditEntity.TodoItem, todo.Id);
+        Notify();
         return (true, null);
     }
 
@@ -47,7 +66,16 @@ public class TodoService(IDbContextFactory<PanialContext> factory, AuditService 
 
         await using var db = _factory.CreateDbContext();
         var original = await db.TodoItems.AsNoTracking().FirstOrDefaultAsync(t => t.Id == todo.Id);
-        db.TodoItems.Update(todo);
+        var stored = await db.TodoItems.FirstOrDefaultAsync(t => t.Id == todo.Id);
+        if (stored == null)
+            return (false, "La tarea ya no existe.");
+
+        // Only what the form edits: completing or reopening is done apart (the sticky note can
+        // complete it while the Pendientes page has it open for editing).
+        stored.Title = todo.Title;
+        stored.Description = todo.Description;
+        stored.Priority = todo.Priority;
+        stored.CustomerId = todo.CustomerId;
         await db.SaveChangesAsync();
 
         if (original != null)
@@ -61,6 +89,7 @@ public class TodoService(IDbContextFactory<PanialContext> factory, AuditService 
                 await audit.LogAsync(AuditCategory.Todos, "Editar",
                     $"Se editó la tarea #{todo.Id} \"{todo.Title}\"", diff.ToString(), AuditEntity.TodoItem, todo.Id);
         }
+        Notify();
         return (true, null);
     }
 
@@ -75,6 +104,7 @@ public class TodoService(IDbContextFactory<PanialContext> factory, AuditService 
 
             await audit.LogAsync(AuditCategory.Todos, "Eliminar",
                 $"Se eliminó la tarea #{id} \"{todo.Title}\"", null, AuditEntity.TodoItem, id);
+            Notify();
         }
     }
 
@@ -95,6 +125,7 @@ public class TodoService(IDbContextFactory<PanialContext> factory, AuditService 
                 ? $"Se completó la tarea #{id} \"{todo.Title}\""
                 : $"Se reabrió la tarea #{id} \"{todo.Title}\"",
             null, AuditEntity.TodoItem, id);
+        Notify();
     }
 
     // Deletes the to-dos completed more than N days ago (by completion date).
@@ -111,6 +142,7 @@ public class TodoService(IDbContextFactory<PanialContext> factory, AuditService 
         {
             db.TodoItems.RemoveRange(old);
             await db.SaveChangesAsync();
+            Notify();
         }
         return old.Count;
     }
