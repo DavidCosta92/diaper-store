@@ -1,0 +1,103 @@
+@* The products chosen to share by WhatsApp, with quantities and the two messages the phone app
+   sends. Nothing is recorded. Shown only while something is chosen. *@
+@using panialera.Services
+@inject WhatsAppShare WhatsApp
+@inject IJSRuntime JS
+
+@if (Selection.Count > 0 || Selection.Message != null)
+{
+    <div class="share-panel">
+        @if (Selection.Message != null)
+        {
+            <div class="alert alert-warning py-1 px-2 mb-2 share-message">@Selection.Message</div>
+        }
+
+        @if (Selection.Count > 0)
+        {
+            <div class="share-panel-header">
+                <strong>Para compartir por WhatsApp (@Selection.Count)</strong>
+                <button class="btn btn-sm btn-link share-clear" @onclick="Clear">Vaciar</button>
+            </div>
+
+            <table class="table table-sm mb-2 share-lines">
+                <tbody>
+                    @foreach (var line in Selection.Lines)
+                    {
+                        var atLimit = line.Max is { } max && line.Quantity >= max;
+                        <tr @key="line.Key">
+                            <td>
+                                @line.Name
+                                @if (!string.IsNullOrWhiteSpace(line.Description))
+                                {
+                                    <span class="text-muted"> – @line.Description</span>
+                                }
+                            </td>
+                            <td class="text-end text-nowrap">@ShareSelection.Money(line.Price)</td>
+                            <td class="text-nowrap share-qty">
+                                <button class="btn btn-sm btn-outline-secondary" disabled="@(line.Quantity <= 1)"
+                                        title="Quitar una unidad" @onclick="() => Selection.Decrease(line)">−</button>
+                                <span class="share-qty-value">@line.Quantity</span>
+                                <button class="btn btn-sm btn-outline-secondary" disabled="@atLimit"
+                                        title="@(atLimit ? "Sin más stock disponible" : "Agregar una unidad")"
+                                        @onclick="() => Selection.TryIncrease(line)">+</button>
+                                @if (line.Max is { } stock)
+                                {
+                                    <small class="text-muted">de @stock</small>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-danger share-remove" title="Quitar" @onclick="() => Selection.Remove(line)">×</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-sm btn-success share-info" @onclick="ShareInfo">Compartir información</button>
+                <button class="btn btn-sm btn-success share-sale" @onclick="ShareSale">Compartir venta</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ShareSelection Selection { get; set; } = default!;
+
+    private void Clear() => Selection.Clear();
+
+    private Task ShareInfo() => ShareAsync(Selection.BuildInfoMessage());
+
+    private Task ShareSale() => ShareAsync(Selection.BuildSaleMessage());
+
+    // Copies the text and opens WhatsApp (the app if installed, else WhatsApp Web) with it ready
+    // to send; if neither opens, the copied text is pasted wherever the user wants.
+    private async Task ShareAsync(string text)
+    {
+        var copied = await TryCopyAsync(text);
+        var target = WhatsApp.TryOpen(text);
+        var alsoCopied = copied ? " También quedó copiado." : string.Empty;
+
+        if (target == WhatsAppTarget.App)
+            AppNotices.Raise("Mensaje listo en WhatsApp", "Elegí el chat." + alsoCopied);
+        else if (target == WhatsAppTarget.Web)
+            AppNotices.Raise("Mensaje listo en WhatsApp Web", "Elegí el chat en el navegador." + alsoCopied);
+        else if (copied)
+            AppNotices.Raise("Mensaje copiado", "No se pudo abrir WhatsApp: pegalo en el chat.", isWarning: true);
+        else
+            AppNotices.Raise("No se pudo compartir", "No se pudo abrir WhatsApp ni copiar el mensaje.", isWarning: true);
+    }
+
+    private async Task<bool> TryCopyAsync(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            return true;
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or TaskCanceledException)
+        {
+            return false;
+        }
+    }
+}
