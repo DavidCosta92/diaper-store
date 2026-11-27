@@ -23,8 +23,24 @@ public class ProductService(IDbContextFactory<PanialContext> factory, AuditServi
         return await db.Products.FindAsync(id);
     }
 
+    // The code works almost as an id: two products can never share it (ignoring case and the
+    // spaces around it). Older databases may have repeats; they are kept, but no new ones are made.
+    public async Task<Product?> FindByCodeAsync(string? code, int exceptId = 0)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return null;
+        return (await GetByCodeAsync(code)).FirstOrDefault(p => p.Id != exceptId);
+    }
+
+    private async Task EnsureCodeIsFreeAsync(string? code, int exceptId)
+    {
+        if (await FindByCodeAsync(code, exceptId) is { } other)
+            throw new DuplicateCodeException(other, code!.Trim());
+    }
+
     public async Task<Product> AddAsync(Product product, int? userId = null)
     {
+        await EnsureCodeIsFreeAsync(product.Code, 0);
         await using var db = _factory.CreateDbContext();
         product.LastUpdatedAt = DateTime.Now;
         product.LastUpdatedByUserId = userId;
@@ -70,6 +86,7 @@ public class ProductService(IDbContextFactory<PanialContext> factory, AuditServi
     public async Task<Product> UpdateAsync(Product product, int? userId = null, int? loadedStock = null,
         Product? loaded = null)
     {
+        await EnsureCodeIsFreeAsync(product.Code, product.Id);
         await using var db = _factory.CreateDbContext();
         await using var transaction = await db.Database.BeginTransactionAsync();
 
@@ -180,6 +197,13 @@ public class ProductService(IDbContextFactory<PanialContext> factory, AuditServi
 
         var product = await db.Products.FindAsync(remote.ProductId)
             ?? throw new EventRejectedException($"{remote.Name} ya no existe: no se aplicó el cambio.");
+
+        // A new code that another product already has is never applied.
+        if (remote.Changes.TryGetValue(RemoteProductFields.Code, out var codeChange)
+            && codeChange.New.ValueKind == System.Text.Json.JsonValueKind.String
+            && await FindByCodeAsync(codeChange.New.GetString(), product.Id) is { } sameCode)
+            throw new EventRejectedException(
+                $"Ya existe {Label(sameCode)} con el código {codeChange.New.GetString()!.Trim()}: no se aplicó el cambio.");
 
         var conflicts = remote.Changes
             .Where(c => !RemoteProductFields.Matches(product, c.Key, c.Value.Seen))
@@ -457,4 +481,11 @@ public class ProductService(IDbContextFactory<PanialContext> factory, AuditServi
 
     private static string Label(Product p) =>
         string.IsNullOrWhiteSpace(p.Description) ? p.Name : $"{p.Name} - {p.Description}";
+}
+
+// Another product already has the code.
+public sealed class DuplicateCodeException(Product existing, string code)
+    : InvalidOperationException($"Ya existe {existing.Name} con el código {code}. El código no se puede repetir.")
+{
+    public Product Existing { get; } = existing;
 }

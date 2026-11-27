@@ -65,6 +65,16 @@ public partial class DistributorService(
         return await db.DistributorProducts.AsNoTracking().OrderBy(d => d.Code).ToListAsync();
     }
 
+    // Catalog items with this code (ignoring case and surrounding spaces). Today there is one
+    // distributor, so there is at most one; with several distributors there could be more.
+    public async Task<List<DistributorProduct>> GetByCodeAsync(string code)
+    {
+        var c = code.Trim();
+        await using var db = factory.CreateDbContext();
+        var all = await db.DistributorProducts.AsNoTracking().Where(d => d.Code != "").ToListAsync();
+        return all.Where(d => d.Code.Trim().Equals(c, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
     public async Task<DistributorProduct?> GetByIdAsync(int id)
     {
         await using var db = factory.CreateDbContext();
